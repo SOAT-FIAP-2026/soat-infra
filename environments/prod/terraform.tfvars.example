@@ -1,0 +1,8 @@
+# Exemplo de terraform.tfvars para o ambiente de produção
+# Copie este arquivo como terraform.tfvars e preencha os valores
+
+# project_name       = "fiap-soat-terraform"
+# default_region     = "sa-east-1"
+# cidr_block         = "10.0.0.0/16"
+# availability_zones = ["sa-east-1a", "sa-east-1b", "sa-east-1c"]
+# instance_types     = ["t3.micro"]
