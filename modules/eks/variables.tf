@@ -34,6 +34,18 @@ variable "terraform_user_arn" {
   type        = string
 }
 
+variable "create_node_group" {
+  description = "Define se o Node Group deve ser criado. False para ambientes locais (Floci não emula Node Groups)."
+  type        = bool
+  default     = true
+}
+
+variable "create_access_entries" {
+  description = "Define se Access Entries e Policy Associations devem ser criados. False para ambientes locais (Floci não emula estas APIs)."
+  type        = bool
+  default     = true
+}
+
 # Dependências explícitas dos policy attachments (passadas como any para depends_on)
 variable "cluster_policy_attachment_dep" {
   description = "Referência ao cluster IAM policy attachment — garante ordem de criação/destruição"

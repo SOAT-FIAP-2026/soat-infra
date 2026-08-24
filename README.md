@@ -8,6 +8,8 @@ Faz parte da Fase 3 do Tech Challenge — repositório dedicado à infraestrutur
 - [Terraform](https://www.terraform.io/)
 - [AWS (Amazon Web Services)](https://aws.amazon.com/)
 - [Amazon EKS](https://aws.amazon.com/eks/)
+- [Floci / LocalStack](https://github.com/floci/floci) (emulação local)
+- [Docker Compose](https://docs.docker.com/compose/)
 - [GitHub Actions](https://github.com/features/actions)
 
 ## Arquitetura
@@ -59,26 +61,65 @@ tech-challenge-infra-k8s/
 │   ├── iam/            # IAM Roles e Policy Attachments do EKS
 │   └── eks/            # EKS Cluster, Node Group, Access Entries
 ├── environments/
-│   └── prod/           # Configuração de produção (orquestra os módulos)
+│   ├── dev/            # Desenvolvimento local (Floci compartilhado)
+│   │   ├── docker-compose.yml   # Referência → usar o Floci da raiz do workspace
+│   │   ├── providers.tf         # Endpoints apontam para localhost:4566
+│   │   ├── main.tf              # Orquestra módulos contra Floci
+│   │   ├── variables.tf         # Defaults seguros para teste local
+│   │   └── outputs.tf
+│   └── prod/           # Produção na AWS
+│       ├── providers.tf         # Backend S3, provider AWS real
+│       ├── main.tf              # Orquestra módulos na AWS
+│       ├── variables.tf         # Variáveis de produção
+│       ├── outputs.tf
+│       └── terraform.tfvars.example
 └── .github/workflows/
     ├── pr.yml          # CI: terraform fmt, validate, plan
     └── deploy.yml      # CD: terraform apply
 ```
 
-## Pré-Requisitos
+## Ambientes
 
-- Conta ativa na AWS
-- Chaves de acesso AWS configuradas localmente (`~/.aws/credentials`) ou no GitHub Secrets (`AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY`)
-- Terraform >= 1.5.0 instalado
-- Bucket S3 `fiap-soat-techchallenge-backend` criado para o state backend
-- IAM User `terraform-user` criado na conta AWS
+### Dev (Local com Floci)
 
-## Execução Local
+O ambiente de desenvolvimento emula os serviços AWS localmente usando [Floci](https://github.com/floci/floci).
+O estado do Terraform é armazenado **localmente** (`terraform.tfstate`).
+
+> **Nota:** O Floci é uma instância **compartilhada** entre todos os repos de infra.
+> Suba-o uma única vez na raiz do workspace (`FIAP - TC/`).
+
+```bash
+# 1. Subir o Floci compartilhado (se ainda não estiver rodando)
+cd "FIAP - TC/"
+docker compose up -d
+
+# 2. Rodar Terraform
+cd tech-challenge-infra-k8s/environments/dev
+terraform init
+terraform plan
+terraform apply
+
+# 3. Verificar outputs
+terraform output
+
+# Para destruir recursos emulados
+terraform destroy
+```
+
+**O que é validado em dev:**
+- Sintaxe e estrutura dos módulos Terraform
+- Wiring correto entre módulos (networking → iam → eks)
+- Outputs e dependências inter-módulos
+
+### Prod (AWS)
+
+O ambiente de produção provisiona recursos reais na AWS.
+O estado é armazenado **remotamente** em S3 (`k8s/terraform.tfstate`).
 
 ```bash
 cd environments/prod
 
-# Inicializar o Terraform
+# Inicializar o Terraform (requer acesso ao bucket S3)
 terraform init
 
 # Verificar o plano de execução
@@ -87,6 +128,19 @@ terraform plan
 # Aplicar a infraestrutura
 terraform apply
 ```
+
+## Isolamento de Estado
+
+```
+environments/
+├── dev/
+│   └── terraform.tfstate    ← Estado LOCAL (nunca comitado)
+└── prod/
+    └── (S3 remoto)          ← s3://fiap-soat-techchallenge-backend/k8s/terraform.tfstate
+```
+
+Cada ambiente tem seu próprio `terraform init` e `terraform apply`, executados **dentro da sua respectiva pasta**.
+Os estados nunca são compartilhados entre ambientes.
 
 ## CI/CD e Deploy Automático
 
@@ -105,6 +159,18 @@ Estes outputs são consumidos por outros repositórios via `terraform_remote_sta
 | `security_group_id` | ID do Security Group principal |
 | `eks_cluster_name` | Nome do cluster EKS |
 | `eks_cluster_endpoint` | Endpoint do API server do EKS |
+
+## Pré-Requisitos
+
+### Dev (Local)
+- Docker e Docker Compose instalados
+
+### Prod (AWS)
+- Conta ativa na AWS
+- Chaves de acesso AWS configuradas localmente (`~/.aws/credentials`) ou no GitHub Secrets
+- Terraform >= 1.5.0 instalado
+- Bucket S3 `fiap-soat-techchallenge-backend` criado para o state backend
+- IAM User `terraform-user` criado na conta AWS
 
 ## Repositórios Relacionados
 

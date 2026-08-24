@@ -14,16 +14,16 @@ output "node_group_role_arn" {
 }
 
 output "cluster_policy_attachment" {
-  description = "Referência ao policy attachment do cluster (para depends_on)"
-  value       = aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy
+  description = "Referência ao policy attachment do cluster (para depends_on). Null quando create_policy_attachments = false."
+  value       = var.create_policy_attachments ? aws_iam_role_policy_attachment.cluster_AmazonEKSClusterPolicy[0] : null
 }
 
 output "node_cni_policy_attachment" {
-  description = "Referência ao CNI policy attachment (para depends_on)"
-  value       = aws_iam_role_policy_attachment.node_group_AmazonEKS_CNI_Policy
+  description = "Referência ao CNI policy attachment (para depends_on). Null quando create_policy_attachments = false."
+  value       = var.create_policy_attachments ? aws_iam_role_policy_attachment.node_group_AmazonEKS_CNI_Policy[0] : null
 }
 
 output "node_ecr_policy_attachment" {
-  description = "Referência ao ECR policy attachment (para depends_on)"
-  value       = aws_iam_role_policy_attachment.node_group_AmazonEC2ContainerRegistryReadOnly
+  description = "Referência ao ECR policy attachment (para depends_on). Null quando create_policy_attachments = false."
+  value       = var.create_policy_attachments ? aws_iam_role_policy_attachment.node_group_AmazonEC2ContainerRegistryReadOnly[0] : null
 }

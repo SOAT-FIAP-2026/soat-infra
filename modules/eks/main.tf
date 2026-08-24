@@ -29,7 +29,10 @@ resource "aws_eks_cluster" "main" {
 }
 
 # --- EKS Node Group -----------------------------------------------------------
+# Condicional: Floci não emula Node Groups (requer EC2 real).
+# Em dev (create_node_group = false), apenas o cluster é criado.
 resource "aws_eks_node_group" "main" {
+  count           = var.create_node_group ? 1 : 0
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = "node-group-${var.project_name}"
   node_role_arn   = var.node_group_role_arn
@@ -61,7 +64,9 @@ resource "aws_eks_node_group" "main" {
 }
 
 # --- Access Entry: permissão de acesso ao cluster via IAM User ----------------
+# Condicional: Floci não emula Access Entries/Policies do EKS.
 resource "aws_eks_access_entry" "terraform_user" {
+  count             = var.create_access_entries ? 1 : 0
   cluster_name      = aws_eks_cluster.main.name
   principal_arn     = var.terraform_user_arn
   kubernetes_groups = ["group-1", "group-2"]
@@ -69,6 +74,7 @@ resource "aws_eks_access_entry" "terraform_user" {
 }
 
 resource "aws_eks_access_policy_association" "cluster_admin" {
+  count         = var.create_access_entries ? 1 : 0
   cluster_name  = aws_eks_cluster.main.name
   policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
   principal_arn = var.terraform_user_arn
