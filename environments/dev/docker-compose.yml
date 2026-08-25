@@ -1,0 +1,45 @@
+# ==============================================================================
+# Floci — Emulador AWS compartilhado para desenvolvimento local
+# ==============================================================================
+# Instância ÚNICA de Floci usada por todos os repositórios de infraestrutura:
+#   - tech-challenge-infra-db  (RDS, EC2, STS)
+#   - tech-challenge-infra-k8s (EC2, EKS, IAM, STS)
+#
+# Uso:
+#   docker compose up -d       # Sobe Floci + UI
+#   docker compose down        # Para tudo
+#   docker compose logs -f     # Ver logs
+#
+# Endpoints:
+#   Floci API: http://localhost:4566
+#   Floci UI:  http://localhost:4500
+# ==============================================================================
+
+services:
+  floci:
+    image: floci/floci:latest
+    container_name: floci-dev
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_HOSTNAME: floci
+      FLOCI_STORAGE_MODE: persistent
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+    volumes:
+      - floci-data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  floci-ui:
+    image: "floci/floci-ui:latest"
+    container_name: "floci-ui"
+    environment:
+      FLOCI_ENDPOINT: "http://floci:4566"
+      AWS_REGION: "us-east-1"
+    ports:
+      - "4500:4500"
+    depends_on:
+      - floci
+    restart: unless-stopped
+
+volumes:
+  floci-data:
