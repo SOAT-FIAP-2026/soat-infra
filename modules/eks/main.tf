@@ -8,8 +8,11 @@ resource "aws_eks_cluster" "main" {
   name    = "eks-${var.project_name}"
   version = "1.35"
 
-  access_config {
-    authentication_mode = "API"
+  dynamic "access_config" {
+    for_each = var.create_access_entries ? [1] : []
+    content {
+      authentication_mode = "API"
+    }
   }
 
   role_arn = var.cluster_role_arn
