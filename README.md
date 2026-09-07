@@ -1,5 +1,8 @@
 # Tech Challenge - Infraestrutura Kubernetes (Terraform)
 
+Consulte a [validação de 07/09/2026](docs/validation.md) para limites do ambiente local,
+resultados das verificações e pendências de CI/CD e proteção de branches.
+
 Repositório responsável pelo provisionamento da infraestrutura Kubernetes (EKS) na AWS utilizando **Terraform**.
 Faz parte da Fase 3 do Tech Challenge — repositório dedicado à infraestrutura do cluster Kubernetes.
 
@@ -11,6 +14,8 @@ Faz parte da Fase 3 do Tech Challenge — repositório dedicado à infraestrutur
 - [Floci / LocalStack](https://github.com/floci/floci) (emulação local)
 - [Docker Compose](https://docs.docker.com/compose/)
 - [GitHub Actions](https://github.com/features/actions)
+- Prometheus, Grafana e Alertmanager para observabilidade local
+- Datadog Agent como alternativa opcional para AWS/EKS
 
 ## Arquitetura
 
@@ -77,6 +82,20 @@ tech-challenge-infra-k8s/
     ├── pr.yml          # CI: terraform fmt, validate, plan
     └── deploy.yml      # CD: terraform apply
 ```
+
+## Observabilidade
+
+O caminho local usa kube-prometheus-stack, com Prometheus, Grafana, Alertmanager,
+kube-state-metrics e node-exporter. Ele cobre latência p95, volume diário de ordens,
+tempo médio de Diagnóstico/Execução/Finalização, falhas de processamento, erros de
+integrações, disponibilidade do deployment e consumo de CPU/memória.
+
+Consulte observability/README.md para instalação local. A configuração do Datadog
+continua disponível como alternativa quando houver um ambiente AWS/EKS real.
+
+## API relacionada
+
+Este repositório não expõe uma API de negócio. A documentação Swagger da aplicação está em https://github.com/SOAT-FIAP-2026/fase1-tech-challenge e, localmente, em http://localhost:8080/swagger.
 
 ## Ambientes
 

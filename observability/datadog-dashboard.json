@@ -1,0 +1,186 @@
+{
+  "title": "Tech Challenge - Ordens de Serviço",
+  "description": "Dashboard operacional da API e do fluxo de ordens de serviço.",
+  "layout_type": "ordered",
+  "template_variables": [
+    {
+      "name": "service",
+      "prefix": "service",
+      "default": "techchallenge-api"
+    },
+    {
+      "name": "namespace",
+      "prefix": "kube_namespace",
+      "default": "techchallenge"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Volume diário de ordens de serviço",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "orders_created",
+                "query": "sum:techchallenge.orders.created{service:$service}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "orders_created"
+              }
+            ],
+            "response_format": "timeseries"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Tempo médio por etapa (ms)",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "diagnostico",
+                "query": "avg:techchallenge.orders.status.duration{service:$service,status:diagnostico}"
+              },
+              {
+                "data_source": "metrics",
+                "name": "execucao",
+                "query": "avg:techchallenge.orders.status.duration{service:$service,status:execucao}"
+              },
+              {
+                "data_source": "metrics",
+                "name": "finalizacao",
+                "query": "avg:techchallenge.orders.status.duration{service:$service,status:finalizacao}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "diagnostico",
+                "alias": "Diagnóstico"
+              },
+              {
+                "formula": "execucao",
+                "alias": "Execução"
+              },
+              {
+                "formula": "finalizacao",
+                "alias": "Finalização"
+              }
+            ],
+            "response_format": "timeseries"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Falhas no processamento de ordens",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "order_failures",
+                "query": "sum:techchallenge.orders.processing.failures{service:$service}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "order_failures"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "query_value",
+        "title": "Erros em integrações",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "integration_errors",
+                "query": "sum:techchallenge.integrations.errors{service:$service}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "integration_errors"
+              }
+            ],
+            "response_format": "scalar"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "Latência das APIs (p95)",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "api_latency",
+                "query": "p95:techchallenge.http.request.duration{service:$service}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "api_latency"
+              }
+            ],
+            "response_format": "timeseries"
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "timeseries",
+        "title": "CPU e memória dos pods",
+        "requests": [
+          {
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "cpu",
+                "query": "avg:kubernetes.cpu.usage.total{kube_namespace:$namespace,kube_deployment:api}"
+              },
+              {
+                "data_source": "metrics",
+                "name": "memory",
+                "query": "avg:kubernetes.memory.usage_bytes{kube_namespace:$namespace,kube_deployment:api}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "cpu",
+                "alias": "CPU"
+              },
+              {
+                "formula": "memory",
+                "alias": "Memória"
+              }
+            ],
+            "response_format": "timeseries"
+          }
+        ]
+      }
+    }
+  ]
+}

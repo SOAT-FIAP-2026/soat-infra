@@ -1,0 +1,35 @@
+grafana:
+  enabled: true
+  adminPassword: admin
+  service:
+    type: ClusterIP
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+
+prometheus:
+  enabled: true
+  prometheusSpec:
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    ruleSelectorNilUsesHelmValues: false
+    ruleSelector: {}
+    ruleNamespaceSelector: {}
+    probeSelector: {}
+    probeNamespaceSelector: {}
+    retention: 7d
+
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    retention: 7d
+
+kubeStateMetrics:
+  enabled: true
+
+nodeExporter:
+  enabled: true
