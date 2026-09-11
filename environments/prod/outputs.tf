@@ -44,3 +44,15 @@ output "eks_cluster_ca_certificate" {
   value       = module.eks.cluster_ca_certificate
   sensitive   = true
 }
+
+# ── Observabilidade ──────────────────────────────────────────────────────────
+output "grafana_access" {
+  description = "Comando para obter o endereço externo do Grafana"
+  value       = "kubectl get svc -n monitoring kube-prometheus-stack-grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
+}
+
+output "otel_collector_endpoint" {
+  description = "Endpoint OTLP interno — configurar no ConfigMap da aplicação"
+  value       = module.observability.otel_collector_endpoint
+}
+

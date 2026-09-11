@@ -1,0 +1,61 @@
+# ==============================================================================
+# Loki — Helm Values (modo single-binary)
+# ==============================================================================
+# Configuração leve para nós t3.small — réplica única com armazenamento em filesystem.
+# Equivale à configuração em observability/loki/loki.yml do Docker Compose.
+# ==============================================================================
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+
+  commonConfig:
+    replication_factor: 1
+
+  storage:
+    type: filesystem
+
+  schemaConfig:
+    configs:
+      - from: "2024-01-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: index_
+          period: 24h
+
+  limits_config:
+    allow_structured_metadata: true
+    volume_enabled: true
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  persistence:
+    enabled: true
+    size: 5Gi
+
+# Desabilitar componentes desnecessários no modo single-binary
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# Desabilitar gateway (não necessário para comunicação interna)
+gateway:
+  enabled: false
+
+# Desabilitar chunksCache e resultsCache (não necessários para single-binary)
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false

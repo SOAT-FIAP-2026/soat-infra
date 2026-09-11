@@ -25,8 +25,10 @@ resource "aws_subnet" "public" {
   availability_zone       = var.availability_zones[count.index]
 
   tags = {
-    Name    = "${var.project_name}-public-subnet-${count.index + 1}"
-    Project = var.project_name
+    Name                                        = "${var.project_name}-public-subnet-${count.index + 1}"
+    Project                                     = var.project_name
+    "kubernetes.io/role/elb"                        = "1"
+    "kubernetes.io/cluster/eks-${var.project_name}" = "shared"
   }
 }
 
@@ -76,6 +78,14 @@ resource "aws_security_group" "main" {
     description = "HTTP"
     from_port   = 80
     to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "NodePort services"
+    from_port   = 30000
+    to_port     = 32767
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }

@@ -13,3 +13,9 @@ output "cluster_ca_certificate" {
   value       = aws_eks_cluster.main.certificate_authority[0].data
   sensitive   = true
 }
+
+output "oidc_issuer_url" {
+  description = "URL do OIDC Issuer do cluster EKS — necessário para IRSA"
+  value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
+}
+

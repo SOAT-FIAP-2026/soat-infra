@@ -1,0 +1,72 @@
+# ==============================================================================
+# OpenTelemetry Collector — Helm Values
+# ==============================================================================
+# Pipeline idêntico ao observability/otel/otel-collector.yml do Docker Compose:
+#   traces  → Tempo (gRPC :4317)
+#   logs    → Loki  (HTTP /otlp)
+#   metrics → debug (stdout)
+#
+# A aplicação .NET envia OTLP para este Collector via:
+#   http://opentelemetry-collector.monitoring.svc.cluster.local:4318
+# ==============================================================================
+
+mode: deployment
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    batch: {}
+
+  exporters:
+    otlp/tempo:
+      endpoint: tempo.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
+    otlphttp/loki:
+      endpoint: http://loki.monitoring.svc.cluster.local:3100/otlp
+    debug:
+      verbosity: basic
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp/tempo]
+      logs:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlphttp/loki]
+      metrics:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [debug]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+service:
+  type: ClusterIP
+
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
