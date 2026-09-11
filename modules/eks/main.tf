@@ -86,3 +86,21 @@ resource "aws_eks_access_policy_association" "cluster_admin" {
     type = "cluster"
   }
 }
+
+# --- EBS CSI Driver Addon ----------------------------------------------------
+# Necessário para que PersistentVolumeClaims (PVCs) criem volumes EBS.
+# Sem este addon, pods de Prometheus, Loki e Tempo não iniciam.
+resource "aws_eks_addon" "ebs_csi_driver" {
+  count                    = var.create_ebs_csi_driver ? 1 : 0
+  cluster_name             = aws_eks_cluster.main.name
+  addon_name               = "aws-ebs-csi-driver"
+  service_account_role_arn = var.ebs_csi_role_arn
+
+  depends_on = [aws_eks_node_group.main]
+
+  tags = {
+    Name    = "ebs-csi-${var.project_name}"
+    Project = var.project_name
+  }
+}
+
