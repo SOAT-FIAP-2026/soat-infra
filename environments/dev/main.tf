@@ -76,12 +76,20 @@ module "lambda" {
 
 # --- Módulo: API Gateway ------------------------------------------------------
 # HTTP API v2 com rota POST /auth integrada à Lambda acima.
+# Em dev: throttling reduzido e CORS aberto para facilitar testes locais.
 module "api_gateway" {
   source = "../../modules/api_gateway"
 
   project_name         = var.project_name
   lambda_invoke_arn    = module.lambda.invoke_arn
   lambda_function_name = module.lambda.function_name
+
+  # Throttling baixo em dev — suficiente para testes sem sobrecarregar o Floci
+  throttling_burst_limit = 10
+  throttling_rate_limit  = 5
+
+  # CORS: aceita qualquer origem em dev para facilitar testes locais
+  cors_allow_origins = ["*"]
 }
 
 # ⚠️  OBSERVABILIDADE EM DEV:

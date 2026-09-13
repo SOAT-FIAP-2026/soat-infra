@@ -70,6 +70,20 @@ variable "jwt_expires_in_seconds" {
   default     = "3600"
 }
 
+# --- API Gateway: segurança ---------------------------------------------------
+variable "cors_allow_origins" {
+  description = "Origens permitidas no CORS do API Gateway. Nunca use ['*'] em produção"
+  type        = list(string)
+  # Sobrescrever via TF_VAR_cors_allow_origins ou terraform.tfvars com o domínio real
+  default = []
+}
+
+variable "api_gateway_kms_key_arn" {
+  description = "ARN da chave KMS para criptografar os logs do API Gateway no CloudWatch"
+  type        = string
+  default     = ""
+}
+
 # --- Alertmanager -------------------------------------------------------------
 variable "alertmanager_slack_webhook_url" {
   description = "Webhook do Slack que recebe os alertas do Alertmanager. Injete via TF_VAR_alertmanager_slack_webhook_url ou Secret do CI; nunca commite o valor."

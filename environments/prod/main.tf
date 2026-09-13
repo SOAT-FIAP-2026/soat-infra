@@ -78,6 +78,8 @@ module "lambda" {
 
 # --- Módulo: API Gateway ------------------------------------------------------
 # HTTP API v2 com rota POST /auth integrada à Lambda acima.
+# Em prod: throttling conservador, CORS restrito ao domínio da aplicação,
+# e logs criptografados com KMS.
 module "api_gateway" {
   source = "../../modules/api_gateway"
 
@@ -85,6 +87,17 @@ module "api_gateway" {
   lambda_invoke_arn    = module.lambda.invoke_arn
   lambda_function_name = module.lambda.function_name
   log_retention_days   = 14
+
+  # Throttling: 50 req/s em steady-state, burst de até 100.
+  # Protege contra DoS e enumeração de CPF por força bruta.
+  throttling_burst_limit = 100
+  throttling_rate_limit  = 50
+
+  # CORS: restringe ao(s) domínio(s) da aplicação em produção.
+  cors_allow_origins = var.cors_allow_origins
+
+  # KMS: criptografa logs do CloudWatch com chave gerenciada pelo projeto.
+  kms_key_arn = var.api_gateway_kms_key_arn
 }
 
 # --- Módulo: Observabilidade --------------------------------------------------
