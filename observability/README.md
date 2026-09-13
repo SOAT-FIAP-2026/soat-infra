@@ -118,11 +118,13 @@ Este diretório instala e configura o Datadog Agent no EKS. O Agent coleta logs 
 
 O script cria somente o Secret local com a API key e instala o chart oficial do Datadog. A chave não deve ser commitada.
 
-A API envia OTLP HTTP para:
+Se o Datadog for adotado, a API passa a enviar OTLP HTTP para:
 
     http://datadog-agent.datadog.svc.cluster.local:4318
 
-Esse endpoint é configurado no overlay AWS do repositório da API.
+Hoje o overlay AWS do repositório da API aponta para o OpenTelemetry Collector
+(`http://opentelemetry-collector.monitoring.svc.cluster.local:4318`). Trocar de backend
+significa alterar apenas essa variável — nenhuma linha de código da aplicação muda.
 
 ## Dashboard e alertas
 
