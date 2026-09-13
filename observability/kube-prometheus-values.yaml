@@ -9,6 +9,31 @@ grafana:
       label: grafana_dashboard
       labelValue: "1"
       searchNamespace: ALL
+    datasources:
+      enabled: true
+
+  # Datasources de logs e traces. Os uids loki/tempo sao os mesmos usados pelo
+  # Docker Compose e pelo modulo Terraform, entao o mesmo dashboard funciona nos
+  # tres caminhos. Instalados por install-grafana.sh/.ps1.
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      editable: false
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      access: proxy
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      editable: false
+      jsonData:
+        tracesToLogs:
+          datasourceUid: loki
+          tags:
+            - correlation_id
+            - trace_id
 
 prometheus:
   enabled: true

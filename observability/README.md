@@ -17,7 +17,13 @@ está em
 | Caminho | Quando usar | O que instala |
 |---|---|---|
 | `modules/observability` (Terraform) | EKS e qualquer cluster gerenciado por este repositório — **caminho oficial** | kube-prometheus-stack, Blackbox Exporter, Loki, Tempo, OpenTelemetry Collector, StorageClass `gp3` e roteamento do Alertmanager |
-| `observability/install-grafana.sh` | cluster local avulso (Kind/Minikube) sem Terraform | kube-prometheus-stack e Blackbox Exporter |
+| `observability/install-grafana.sh` / `.ps1` | cluster local avulso (Kind/Minikube) sem Terraform | os mesmos componentes, com os mesmos nomes de release, reaproveitando os values do módulo. Sem StorageClass `gp3` (usa a padrão do cluster) e sem roteamento do Alertmanager |
+
+Os dois caminhos usam os mesmos nomes de Service e os mesmos uids de datasource
+(`prometheus`, `loki`, `tempo`), então o dashboard da aplicação funciona igual nos dois —
+e também no Docker Compose. A única diferença visível é o nome do release do
+kube-prometheus-stack: `monitoring-grafana` pelo script, `kube-prometheus-stack-grafana`
+pelo Terraform.
 
 O módulo Terraform é aplicado junto com o cluster:
 
@@ -77,10 +83,10 @@ de uptime e o alerta correspondente. node-exporter fornece métricas do nó e n�
 substitui cAdvisor para os containers.
 
 Logs e traces centralizados vêm de Loki, Tempo e OpenTelemetry Collector, instalados
-pelo módulo Terraform (`modules/observability`) e já apontados pela variável
-`OTEL_EXPORTER_OTLP_ENDPOINT` dos overlays da aplicação. Se você instalou apenas pelo
-script acima, esses três componentes não sobem e os logs ficam acessíveis somente por
-`kubectl logs`.
+tanto pelo módulo Terraform quanto pelo script, e já apontados pela variável
+`OTEL_EXPORTER_OTLP_ENDPOINT` dos overlays da aplicação
+(`http://opentelemetry-collector.monitoring.svc.cluster.local:4318`). São eles que
+alimentam os painéis "Logs estruturados (JSON)" e "Traces recentes" do dashboard.
 
 O dashboard é provisionado pela aplicação em
 observability/grafana/dashboards/techchallenge-observability.json.
