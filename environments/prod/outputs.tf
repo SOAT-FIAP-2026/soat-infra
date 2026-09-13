@@ -28,6 +28,27 @@ output "security_group_id" {
   value       = module.networking.main_security_group_id
 }
 
+# ── Lambda + API Gateway ──────────────────────────────────────────────────────
+output "lambda_function_name" {
+  description = "Nome da função Lambda de autenticação"
+  value       = module.lambda.function_name
+}
+
+output "lambda_function_arn" {
+  description = "ARN da função Lambda de autenticação"
+  value       = module.lambda.function_arn
+}
+
+output "api_gateway_endpoint" {
+  description = "URL base do API Gateway"
+  value       = module.api_gateway.api_endpoint
+}
+
+output "auth_url" {
+  description = "Endpoint de autenticação — POST /auth"
+  value       = module.api_gateway.auth_url
+}
+
 # ── EKS ───────────────────────────────────────────────────────────────────────
 output "eks_cluster_name" {
   description = "Nome do cluster EKS — usado pelo kubectl e CI/CD"

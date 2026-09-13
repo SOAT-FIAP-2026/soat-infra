@@ -34,3 +34,26 @@ variable "instance_types" {
   type        = list(string)
   default     = ["t3.micro"]
 }
+
+# --- Lambda + API Gateway -----------------------------------------------------
+variable "lambda_package_path" {
+  description = "Caminho local para o ZIP da Lambda publicado com 'dotnet lambda package'"
+  type        = string
+  # Após buildar: dotnet lambda package -o publish.zip
+  # no diretório lambda-auth-function/src/Fiap.TechChallenge.LambdaAuth
+  default = "../../../../lambda-auth-function/src/Fiap.TechChallenge.LambdaAuth/publish.zip"
+}
+
+variable "db_connection_string" {
+  description = "Connection string do PostgreSQL para a Lambda (fictícia em dev)"
+  type        = string
+  default     = "Host=localhost;Port=5432;Database=techchallenge;Username=postgres;Password=postgres"
+  sensitive   = true
+}
+
+variable "jwt_secret" {
+  description = "Segredo para assinar os tokens JWT (fictício em dev)"
+  type        = string
+  default     = "dev-secret-key-change-in-production-min-32-chars"
+  sensitive   = true
+}

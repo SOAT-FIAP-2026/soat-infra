@@ -39,6 +39,52 @@ variable "grafana_admin_password" {
   sensitive   = true
 }
 
+# --- Lambda + API Gateway -----------------------------------------------------
+variable "lambda_s3_bucket" {
+  description = "Bucket S3 que contém o ZIP publicado da Lambda de autenticação"
+  type        = string
+  default     = "fiap-soat-techchallenge-backend"
+}
+
+variable "lambda_s3_key" {
+  description = "Chave S3 do ZIP da Lambda — atualizada pelo CI/CD após cada build"
+  type        = string
+  default     = "lambda/auth/lambda-auth.zip"
+}
+
+variable "db_connection_string" {
+  description = "Connection string do PostgreSQL RDS para a Lambda"
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_secret" {
+  description = "Segredo para assinar os tokens JWT — deve ter no mínimo 32 caracteres"
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_expires_in_seconds" {
+  description = "Tempo de expiração do JWT em segundos"
+  type        = string
+  default     = "3600"
+}
+
+# --- API Gateway: segurança ---------------------------------------------------
+variable "cors_allow_origins" {
+  description = "Origens permitidas no CORS do API Gateway. Nunca use ['*'] em produção"
+  type        = list(string)
+  # Sobrescrever via TF_VAR_cors_allow_origins ou terraform.tfvars com o domínio real
+  default = []
+}
+
+variable "api_gateway_kms_key_arn" {
+  description = "ARN da chave KMS para criptografar os logs do API Gateway no CloudWatch"
+  type        = string
+  default     = ""
+}
+
+# --- Alertmanager -------------------------------------------------------------
 variable "alertmanager_slack_webhook_url" {
   description = "Webhook do Slack que recebe os alertas do Alertmanager. Injete via TF_VAR_alertmanager_slack_webhook_url ou Secret do CI; nunca commite o valor."
   type        = string
