@@ -19,6 +19,7 @@ prometheus:
     ruleSelectorNilUsesHelmValues: false
     ruleSelector: {}
     ruleNamespaceSelector: {}
+    probeSelectorNilUsesHelmValues: false
     probeSelector: {}
     probeNamespaceSelector: {}
     retention: 7d
@@ -26,7 +27,7 @@ prometheus:
 alertmanager:
   enabled: true
   alertmanagerSpec:
-    retention: 7d
+    retention: 168h
 
 kubeStateMetrics:
   enabled: true

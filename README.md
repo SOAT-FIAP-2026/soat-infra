@@ -14,8 +14,11 @@ Faz parte da Fase 3 do Tech Challenge — repositório dedicado à infraestrutur
 - [Floci / LocalStack](https://github.com/floci/floci) (emulação local)
 - [Docker Compose](https://docs.docker.com/compose/)
 - [GitHub Actions](https://github.com/features/actions)
-- Prometheus, Grafana e Alertmanager para observabilidade local
-- Datadog Agent como alternativa opcional para AWS/EKS
+- Helm provider do Terraform para instalar a stack de observabilidade
+- Prometheus, Grafana e Alertmanager para métricas, dashboards e alertas
+- Loki, Tempo e OpenTelemetry Collector para logs estruturados e traces
+- Blackbox Exporter para sondas de uptime
+- Datadog Agent somente como alternativa futura opcional para AWS/EKS
 
 ## Arquitetura
 
@@ -45,6 +48,20 @@ O Terraform neste repositório provisiona:
 │  │  │  │    Node Group (t3.micro)    │ │        │  │
 │  │  │  │    min: 1 | max: 3          │ │        │  │
 │  │  │  └─────────────────────────────┘ │        │  │
+│  │  │                                  │        │  │
+│  │  │  ns: techchallenge               │        │  │
+│  │  │  ┌─────────────────────────────┐ │        │  │
+│  │  │  │  API .NET  →  /metrics      │ │        │  │
+│  │  │  │  ServiceMonitor | Probe     │ │        │  │
+│  │  │  └──────────────┬──────────────┘ │        │  │
+│  │  │                 │ scrape / OTLP  │        │  │
+│  │  │  ns: monitoring ▼                │        │  │
+│  │  │  ┌─────────────────────────────┐ │        │  │
+│  │  │  │ Prometheus | Alertmanager   │ │        │  │
+│  │  │  │ Grafana    | Blackbox       │ │        │  │
+│  │  │  │ Loki | Tempo | OTel Collec. │ │        │  │
+│  │  │  │ PVCs gp3 (EBS CSI)          │ │        │  │
+│  │  │  └─────────────────────────────┘ │        │  │
 │  │  └──────────────────────────────────┘        │  │
 │  │                                               │  │
 │  └───────────────────────────────────────────────┘  │
@@ -64,7 +81,9 @@ tech-challenge-infra-k8s/
 ├── modules/
 │   ├── networking/     # VPC, Subnets, IGW, Route Tables, Security Group
 │   ├── iam/            # IAM Roles e Policy Attachments do EKS
-│   └── eks/            # EKS Cluster, Node Group, Access Entries
+│   ├── eks/            # EKS Cluster, Node Group, Access Entries
+│   └── observability/  # kube-prometheus-stack, Blackbox, Loki, Tempo, OTel Collector
+│       └── values/     # Helm values de cada componente
 ├── environments/
 │   ├── dev/            # Desenvolvimento local (Floci compartilhado)
 │   │   ├── docker-compose.yml   # Referência → usar o Floci da raiz do workspace
@@ -78,6 +97,10 @@ tech-challenge-infra-k8s/
 │       ├── variables.tf         # Variáveis de produção
 │       ├── outputs.tf
 │       └── terraform.tfvars.example
+├── observability/      # Instalação avulsa via script + alternativa Datadog
+│   ├── install-grafana.sh
+│   ├── kube-prometheus-values.yaml
+│   └── datadog-*.json / install-datadog.sh
 └── .github/workflows/
     ├── pr.yml          # CI: terraform fmt, validate, plan
     └── deploy.yml      # CD: terraform apply
@@ -85,13 +108,32 @@ tech-challenge-infra-k8s/
 
 ## Observabilidade
 
-O caminho local usa kube-prometheus-stack, com Prometheus, Grafana, Alertmanager,
-kube-state-metrics e node-exporter. Ele cobre latência p95, volume diário de ordens,
-tempo médio de Diagnóstico/Execução/Finalização, falhas de processamento, erros de
-integrações, disponibilidade do deployment e consumo de CPU/memória.
+O caminho oficial é o módulo Terraform [`modules/observability`](modules/observability/),
+aplicado junto com o cluster. Ele instala:
 
-Consulte observability/README.md para instalação local. A configuração do Datadog
-continua disponível como alternativa quando houver um ambiente AWS/EKS real.
+| Componente | Papel |
+|---|---|
+| kube-prometheus-stack | Prometheus, Alertmanager, Grafana, kube-state-metrics e node-exporter |
+| Blackbox Exporter | sondas HTTP do `/health/ready` (uptime) |
+| Loki | logs estruturados JSON da API e da Lambda |
+| Tempo | traces distribuídos, correlacionados aos logs por `correlation_id` |
+| OpenTelemetry Collector | recebe OTLP da aplicação e encaminha para Loki e Tempo |
+| StorageClass `gp3` | volumes EBS dos PVCs de Prometheus, Loki e Tempo |
+
+A cobertura inclui latência p95, volume diário de ordens, tempo médio de
+Diagnóstico/Execução/Finalização, falhas de processamento, erros de integrações,
+disponibilidade do deployment, uptime das sondas e consumo de CPU/memória — com alertas
+de CPU, memória, CrashLoopBackOff, OOMKill e reinícios definidos em
+`k8s/observability/prometheusrule.yaml` no repositório da aplicação.
+
+Por padrão o Alertmanager usa o receiver `null` (alertas visíveis na interface, sem
+envio). Defina `TF_VAR_alertmanager_slack_webhook_url` ou `TF_VAR_alertmanager_webhook_url`
+para roteá-los ao destino da equipe. Detalhes em [observability/README.md](observability/README.md).
+
+A escolha de Prometheus/Grafana em vez de Datadog ou New Relic está justificada no
+[ADR-003](https://github.com/SOAT-FIAP-2026/fase1-tech-challenge/blob/main/docs/adrs/ADR-003-observability-stack.md).
+A configuração do Datadog continua versionada em `observability/` apenas como alternativa
+futura para um ambiente AWS/EKS real e não é necessária para atender aos requisitos.
 
 ## API relacionada
 
