@@ -62,5 +62,11 @@ module "observability" {
   grafana_admin_password = var.grafana_admin_password
   grafana_service_type   = "LoadBalancer"
 
+  # Destino real dos alertas. Vazio mantem o receiver "null": os alertas continuam
+  # visiveis no Alertmanager, apenas sem notificacao externa.
+  alertmanager_slack_webhook_url = var.alertmanager_slack_webhook_url
+  alertmanager_slack_channel     = var.alertmanager_slack_channel
+  alertmanager_webhook_url       = var.alertmanager_webhook_url
+
   depends_on = [module.eks]
 }

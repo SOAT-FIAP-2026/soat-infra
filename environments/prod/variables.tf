@@ -38,3 +38,22 @@ variable "grafana_admin_password" {
   default     = "admin"
   sensitive   = true
 }
+
+variable "alertmanager_slack_webhook_url" {
+  description = "Webhook do Slack que recebe os alertas do Alertmanager. Injete via TF_VAR_alertmanager_slack_webhook_url ou Secret do CI; nunca commite o valor."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "alertmanager_slack_channel" {
+  description = "Canal do Slack usado para os alertas."
+  type        = string
+  default     = "#techchallenge-alertas"
+}
+
+variable "alertmanager_webhook_url" {
+  description = "Webhook HTTP genérico para os alertas, alternativa ao Slack."
+  type        = string
+  default     = ""
+}

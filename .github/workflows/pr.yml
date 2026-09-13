@@ -1,39 +1,69 @@
 name: "Terraform PR Check"
+
 on:
   pull_request:
     branches:
       - main
-      - master
+
+permissions:
+  contents: read
 
 jobs:
   terraform:
-    name: "Terraform Plan"
+    name: "Terraform Check"
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: environments/prod
+    env:
+      # fmt e validate nao precisam de nuvem. Plan precisa, entao os passos que
+      # dependem de credencial so rodam quando o secret existe no repositorio.
+      HAS_AWS_CREDENTIALS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: sa-east-1
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
 
-      - name: Terraform Init
-        run: terraform init
-
+      # Recursivo a partir da raiz: cobre modules/ e todos os environments
       - name: Terraform Format
         run: terraform fmt -check -recursive ../..
+
+      - name: Terraform Init (sem backend)
+        run: terraform init -backend=false -input=false
 
       - name: Terraform Validate
         run: terraform validate
 
+      - name: Aviso quando o plan nao pode rodar
+        if: env.HAS_AWS_CREDENTIALS != 'true'
+        run: |
+          {
+            echo "### Terraform Plan nao executado"
+            echo ""
+            echo "Os secrets \`AWS_ACCESS_KEY_ID\` e \`AWS_SECRET_ACCESS_KEY\` nao estao"
+            echo "definidos neste repositorio. \`fmt\` e \`validate\` rodaram normalmente."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Configure AWS Credentials
+        if: env.HAS_AWS_CREDENTIALS == 'true'
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4.3.1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ vars.AWS_REGION || 'sa-east-1' }}
+
+      - name: Terraform Init
+        if: env.HAS_AWS_CREDENTIALS == 'true'
+        run: terraform init -reconfigure -input=false
+
       - name: Terraform Plan
-        run: terraform plan
+        if: env.HAS_AWS_CREDENTIALS == 'true'
+        env:
+          TF_VAR_grafana_admin_password: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          TF_VAR_alertmanager_slack_webhook_url: ${{ secrets.ALERTMANAGER_SLACK_WEBHOOK_URL }}
+          TF_VAR_alertmanager_webhook_url: ${{ secrets.ALERTMANAGER_WEBHOOK_URL }}
+        run: terraform plan -input=false -no-color

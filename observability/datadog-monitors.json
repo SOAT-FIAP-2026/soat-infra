@@ -1,0 +1,49 @@
+[
+  {
+    "name": "[TechChallenge] Falha no processamento de ordem de serviço",
+    "type": "metric alert",
+    "query": "sum(last_5m):sum:techchallenge.orders.processing.failures{service:techchallenge-api}.as_count() > 0",
+    "message": "@pagerduty Falha no processamento de ordem de serviço. Verifique os logs usando o correlation_id.",
+    "tags": ["service:techchallenge-api", "team:soat", "severity:critical"],
+    "options": {
+      "include_tags": true,
+      "notify_no_data": false,
+      "renotify_interval": 30
+    }
+  },
+  {
+    "name": "[TechChallenge] Erro em integração externa",
+    "type": "metric alert",
+    "query": "sum(last_5m):sum:techchallenge.integrations.errors{service:techchallenge-api}.as_count() > 0",
+    "message": "Falha em integração externa. Verifique o integration tag e os logs estruturados.",
+    "tags": ["service:techchallenge-api", "team:soat", "severity:warning"],
+    "options": {
+      "include_tags": true,
+      "notify_no_data": false,
+      "renotify_interval": 30
+    }
+  },
+  {
+    "name": "[TechChallenge] Latência elevada da API",
+    "type": "metric alert",
+    "query": "avg(last_10m):p95:techchallenge.http.request.duration{service:techchallenge-api} > 1000",
+    "message": "p95 da API acima de 1 segundo por 10 minutos.",
+    "tags": ["service:techchallenge-api", "team:soat", "severity:warning"],
+    "options": {
+      "include_tags": true,
+      "notify_no_data": false
+    }
+  },
+  {
+    "name": "[TechChallenge] Deployment sem réplicas disponíveis",
+    "type": "metric alert",
+    "query": "min(last_5m):min:kubernetes_state.deployment.replicas_available{kube_namespace:techchallenge,kube_deployment:api} < 1",
+    "message": "O deployment da API não possui réplicas disponíveis. Healthcheck e rollout devem ser investigados.",
+    "tags": ["service:techchallenge-api", "team:soat", "severity:critical"],
+    "options": {
+      "include_tags": true,
+      "notify_no_data": true,
+      "no_data_timeframe": 10
+    }
+  }
+]
