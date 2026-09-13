@@ -1,0 +1,30 @@
+# ==============================================================================
+# Tempo — Helm Values
+# ==============================================================================
+# Armazenamento de distributed traces — single-binary leve.
+# Equivale à configuração em observability/tempo/tempo.yml do Docker Compose.
+# ==============================================================================
+
+tempo:
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+        http:
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+persistence:
+  enabled: true
+  size: 5Gi

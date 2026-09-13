@@ -1,0 +1,115 @@
+# ==============================================================================
+# kube-prometheus-stack — Helm Values
+# ==============================================================================
+# Configuração otimizada para nós t3.small (2 GB RAM).
+# Inclui: Prometheus Operator, Alertmanager, Grafana, Node Exporter, Kube State Metrics.
+# Os CRDs ServiceMonitor, PrometheusRule e Probe ficam disponíveis automaticamente.
+# ==============================================================================
+
+# --- Prometheus ---------------------------------------------------------------
+prometheus:
+  prometheusSpec:
+    # Descobre ServiceMonitors de QUALQUER namespace (inclusive "techchallenge")
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorNamespaceSelector: {}
+
+    # Descobre PrometheusRules de QUALQUER namespace
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelector: {}
+
+    # Descobre Probes (Blackbox) de QUALQUER namespace
+    probeSelectorNilUsesHelmValues: false
+    probeNamespaceSelector: {}
+
+    # Recursos ajustados para nós t3.small
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+
+    # Retenção de dados: 7 dias
+    retention: 7d
+
+    # Armazenamento persistente em EBS via PVC
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 5Gi
+
+# --- Alertmanager -------------------------------------------------------------
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 32Mi
+      limits:
+        memory: 64Mi
+
+# --- Grafana ------------------------------------------------------------------
+grafana:
+  # adminPassword é definido via set_sensitive no Terraform (não hardcodado aqui)
+  service:
+    port: 80
+    targetPort: 3000
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+  # Sidecar de dashboards — descobre ConfigMaps com label grafana_dashboard=1
+  sidecar:
+    dashboards:
+      enabled: true
+      searchNamespace: ALL
+      label: grafana_dashboard
+    datasources:
+      enabled: true
+
+  # Datasources adicionais provisionados automaticamente (Loki e Tempo)
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      access: proxy
+      url: http://loki.monitoring.svc.cluster.local:3100
+      editable: false
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      access: proxy
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      editable: false
+      jsonData:
+        tracesToLogs:
+          datasourceUid: loki
+          tags:
+            - correlation_id
+            - trace_id
+
+# --- Node Exporter (DaemonSet em cada nó) ------------------------------------
+nodeExporter:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 16Mi
+    limits:
+      memory: 32Mi
+
+# --- Kube State Metrics -------------------------------------------------------
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi

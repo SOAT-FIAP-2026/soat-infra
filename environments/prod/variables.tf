@@ -29,5 +29,12 @@ variable "availability_zones" {
 variable "instance_types" {
   description = "Tipos de instância EC2 para os nodes do EKS"
   type        = list(string)
-  default     = ["t3.micro"]
+  default     = ["t3.small"]
+}
+
+variable "grafana_admin_password" {
+  description = "Senha do admin do Grafana — definir como variável sensível no Terraform Cloud"
+  type        = string
+  default     = "admin"
+  sensitive   = true
 }

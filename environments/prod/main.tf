@@ -20,7 +20,9 @@ module "networking" {
 module "iam" {
   source = "../../modules/iam"
 
-  project_name = var.project_name
+  project_name        = var.project_name
+  eks_oidc_issuer_url = module.eks.oidc_issuer_url
+  create_ebs_csi_role = true
 }
 
 # --- Módulo: EKS --------------------------------------------------------------
@@ -35,8 +37,30 @@ module "eks" {
   instance_types      = var.instance_types
   terraform_user_arn  = data.aws_iam_user.terraform_user.arn
 
+  # EBS CSI Driver — necessário para PVCs da stack de observabilidade
+  create_ebs_csi_driver = true
+  ebs_csi_role_arn      = module.iam.ebs_csi_role_arn
+
   # Propaga dependências de policy para garantir a ordem correta de create/destroy
   cluster_policy_attachment_dep  = module.iam.cluster_policy_attachment
   node_cni_policy_attachment_dep = module.iam.node_cni_policy_attachment
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
+}
+
+# --- Módulo: Observabilidade --------------------------------------------------
+# Stack completa: Prometheus, Grafana, Alertmanager, Loki, Tempo, OTel Collector.
+# Grafana fica acessível externamente via AWS Load Balancer.
+#
+# ⚠️  PRIMEIRO DEPLOY:
+#   No primeiro 'terraform apply', o cluster EKS pode ainda não estar pronto
+#   quando o Terraform tenta configurar os providers Helm/Kubernetes.
+#   Se ocorrer erro, execute novamente: terraform apply
+module "observability" {
+  source = "../../modules/observability"
+
+  project_name           = var.project_name
+  grafana_admin_password = var.grafana_admin_password
+  grafana_service_type   = "LoadBalancer"
+
+  depends_on = [module.eks]
 }

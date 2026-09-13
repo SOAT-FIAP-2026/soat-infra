@@ -61,3 +61,15 @@ variable "node_ecr_policy_attachment_dep" {
   description = "Referência ao ECR policy attachment do node group"
   type        = any
 }
+
+variable "create_ebs_csi_driver" {
+  description = "Define se o addon EBS CSI Driver deve ser instalado. False para ambientes locais (Floci)."
+  type        = bool
+  default     = true
+}
+
+variable "ebs_csi_role_arn" {
+  description = "ARN da IAM Role IRSA para o EBS CSI Driver — necessário para criar PersistentVolumes"
+  type        = string
+  default     = ""
+}
