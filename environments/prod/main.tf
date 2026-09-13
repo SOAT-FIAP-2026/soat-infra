@@ -47,6 +47,46 @@ module "eks" {
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
 }
 
+# --- Módulo: Lambda -----------------------------------------------------------
+# Pacote carregado do S3 — o CI/CD faz 'dotnet lambda package' e faz upload
+# antes do 'terraform apply', garantindo que o objeto exista no bucket.
+module "lambda" {
+  source = "../../modules/lambda"
+
+  project_name  = var.project_name
+  function_name = "${var.project_name}-lambda-auth"
+  handler       = "Fiap.TechChallenge.LambdaAuth::Fiap.TechChallenge.LambdaAuth.Function::HandleAsync"
+  runtime       = "dotnet8"
+  memory_size   = 512
+  timeout       = 30
+
+  # Pacote via S3 (obrigatório em prod)
+  use_s3    = true
+  s3_bucket = var.lambda_s3_bucket
+  s3_key    = var.lambda_s3_key
+
+  log_retention_days = 14
+
+  environment_variables = {
+    DB_CONNECTION_STRING   = var.db_connection_string
+    JWT_SECRET             = var.jwt_secret
+    JWT_ISSUER             = "fiap-tech-challenge"
+    JWT_AUDIENCE           = "fiap-api"
+    JWT_EXPIRES_IN_SECONDS = var.jwt_expires_in_seconds
+  }
+}
+
+# --- Módulo: API Gateway ------------------------------------------------------
+# HTTP API v2 com rota POST /auth integrada à Lambda acima.
+module "api_gateway" {
+  source = "../../modules/api_gateway"
+
+  project_name         = var.project_name
+  lambda_invoke_arn    = module.lambda.invoke_arn
+  lambda_function_name = module.lambda.function_name
+  log_retention_days   = 14
+}
+
 # --- Módulo: Observabilidade --------------------------------------------------
 # Stack completa: Prometheus, Grafana, Alertmanager, Loki, Tempo, OTel Collector.
 # Grafana fica acessível externamente via AWS Load Balancer.

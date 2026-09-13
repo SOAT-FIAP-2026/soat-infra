@@ -38,3 +38,34 @@ variable "grafana_admin_password" {
   default     = "admin"
   sensitive   = true
 }
+
+# --- Lambda + API Gateway -----------------------------------------------------
+variable "lambda_s3_bucket" {
+  description = "Bucket S3 que contém o ZIP publicado da Lambda de autenticação"
+  type        = string
+  default     = "fiap-soat-techchallenge-backend"
+}
+
+variable "lambda_s3_key" {
+  description = "Chave S3 do ZIP da Lambda — atualizada pelo CI/CD após cada build"
+  type        = string
+  default     = "lambda/auth/lambda-auth.zip"
+}
+
+variable "db_connection_string" {
+  description = "Connection string do PostgreSQL RDS para a Lambda"
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_secret" {
+  description = "Segredo para assinar os tokens JWT — deve ter no mínimo 32 caracteres"
+  type        = string
+  sensitive   = true
+}
+
+variable "jwt_expires_in_seconds" {
+  description = "Tempo de expiração do JWT em segundos"
+  type        = string
+  default     = "3600"
+}

@@ -50,6 +50,40 @@ module "eks" {
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
 }
 
+# --- Módulo: Lambda -----------------------------------------------------------
+# Em dev, carrega o ZIP local compilado com 'dotnet lambda package'.
+# Variáveis sensíveis usam valores fictícios adequados ao Floci.
+module "lambda" {
+  source = "../../modules/lambda"
+
+  project_name  = var.project_name
+  function_name = "${var.project_name}-lambda-auth"
+  handler       = "Fiap.TechChallenge.LambdaAuth::Fiap.TechChallenge.LambdaAuth.Function::HandleAsync"
+  runtime       = "dotnet8"
+
+  # Pacote local — não usa S3 em dev
+  use_s3             = false
+  local_package_path = var.lambda_package_path
+
+  environment_variables = {
+    DB_CONNECTION_STRING   = var.db_connection_string
+    JWT_SECRET             = var.jwt_secret
+    JWT_ISSUER             = "fiap-tech-challenge"
+    JWT_AUDIENCE           = "fiap-api"
+    JWT_EXPIRES_IN_SECONDS = "3600"
+  }
+}
+
+# --- Módulo: API Gateway ------------------------------------------------------
+# HTTP API v2 com rota POST /auth integrada à Lambda acima.
+module "api_gateway" {
+  source = "../../modules/api_gateway"
+
+  project_name         = var.project_name
+  lambda_invoke_arn    = module.lambda.invoke_arn
+  lambda_function_name = module.lambda.function_name
+}
+
 # ⚠️  OBSERVABILIDADE EM DEV:
 # O módulo de observabilidade NÃO é instanciado em dev.
 # O Floci emula APIs da AWS mas não roda um cluster K8s real — Helm falharia.

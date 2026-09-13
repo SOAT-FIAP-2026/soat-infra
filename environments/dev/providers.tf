@@ -40,9 +40,13 @@ provider "aws" {
   # Todos os endpoints apontam para o Floci compartilhado (emulador local de AWS)
   # Suba o Floci via: docker compose up -d  (na raiz do workspace FIAP - TC/)
   endpoints {
-    ec2 = "http://localhost:4566"
-    eks = "http://localhost:4566"
-    iam = "http://localhost:4566"
-    sts = "http://localhost:4566"
+    ec2            = "http://localhost:4566"
+    eks            = "http://localhost:4566"
+    iam            = "http://localhost:4566"
+    sts            = "http://localhost:4566"
+    lambda         = "http://localhost:4566"
+    apigateway     = "http://localhost:4566"
+    apigatewayv2   = "http://localhost:4566"
+    cloudwatchlogs = "http://localhost:4566"
   }
 }
