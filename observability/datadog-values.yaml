@@ -1,0 +1,30 @@
+# Valores do Datadog Agent para o cluster EKS.
+# A API key é lida de um Secret criado pelo install-datadog.sh.
+datadog:
+  apiKeyExistingSecret: datadog-api-key
+  site: datadoghq.com
+  logs:
+    enabled: true
+    containerCollectAll: true
+  apm:
+    enabled: true
+    portEnabled: true
+  otlp:
+    receiver:
+      protocols:
+        grpc:
+          enabled: true
+        http:
+          enabled: true
+  kubeStateMetricsCore:
+    enabled: true
+
+clusterAgent:
+  enabled: true
+
+agents:
+  containers:
+    agent:
+      env:
+        - name: DD_LOGS_CONFIG_AUTO_MULTI_LINE_DETECTION
+          value: "true"

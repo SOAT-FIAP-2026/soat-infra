@@ -49,3 +49,22 @@ variable "enable_otel_collector" {
   type        = bool
   default     = true
 }
+
+variable "alertmanager_slack_webhook_url" {
+  description = "Webhook do Slack que recebe os alertas do Alertmanager. Vazio mantém os alertas apenas na interface do Alertmanager."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "alertmanager_slack_channel" {
+  description = "Canal do Slack usado quando alertmanager_slack_webhook_url está preenchido."
+  type        = string
+  default     = "#techchallenge-alertas"
+}
+
+variable "alertmanager_webhook_url" {
+  description = "Webhook HTTP genérico que recebe os alertas (alternativa ao Slack). Vazio desativa o receiver."
+  type        = string
+  default     = ""
+}
