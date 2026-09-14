@@ -139,20 +139,20 @@ resource "aws_lb_listener" "grafana" {
 
 # --- Associação: Auto Scaling Group do EKS Node Group → Target Groups ---------
 resource "aws_autoscaling_attachment" "api" {
-  count                  = var.autoscaling_group_name != "" ? 1 : 0
+  count                  = var.enable_autoscaling_attachment ? 1 : 0
   autoscaling_group_name = var.autoscaling_group_name
   lb_target_group_arn    = aws_lb_target_group.api.arn
 }
 
 resource "aws_autoscaling_attachment" "grafana" {
-  count                  = var.autoscaling_group_name != "" ? 1 : 0
+  count                  = var.enable_autoscaling_attachment ? 1 : 0
   autoscaling_group_name = var.autoscaling_group_name
   lb_target_group_arn    = aws_lb_target_group.grafana.arn
 }
 
 # --- Regra de Ingress: Permite que o ALB envie tráfego para os nós do EKS (NodePort) ---
 resource "aws_security_group_rule" "nodes_from_alb" {
-  count                    = var.node_security_group_id != "" ? 1 : 0
+  count                    = var.enable_node_security_group_rule ? 1 : 0
   type                     = "ingress"
   description              = "Permite trafego do ALB para os nos do EKS nas portas NodePort"
   from_port                = 30000
