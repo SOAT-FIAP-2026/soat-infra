@@ -44,9 +44,9 @@ resource "aws_eks_node_group" "main" {
   instance_types  = var.instance_types
 
   scaling_config {
-    desired_size = 2
-    max_size     = 3
-    min_size     = 1
+    desired_size = var.desired_size
+    max_size     = var.max_size
+    min_size     = var.min_size
   }
 
   update_config {

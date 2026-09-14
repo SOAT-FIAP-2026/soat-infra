@@ -115,7 +115,8 @@ resource "helm_release" "kube_prometheus_stack" {
       grafana = {
         adminPassword = var.grafana_admin_password
         service = {
-          type = var.grafana_service_type
+          type     = var.grafana_service_type
+          nodePort = var.grafana_service_type == "NodePort" ? 30300 : null
         }
       }
       alertmanager = {

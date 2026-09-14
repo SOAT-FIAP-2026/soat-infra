@@ -1,241 +1,252 @@
-# Tech Challenge - Infraestrutura Kubernetes (Terraform)
+# Tech Challenge - Infraestrutura Kubernetes & Load Balancer (Terraform)
 
 Consulte a [validação de 07/09/2026](docs/validation.md) para limites do ambiente local,
 resultados das verificações e pendências de CI/CD e proteção de branches.
 
-Repositório responsável pelo provisionamento da infraestrutura Kubernetes (EKS) na AWS utilizando **Terraform**.
-Faz parte da Fase 3 do Tech Challenge — repositório dedicado à infraestrutura do cluster Kubernetes.
+Repositório responsável pelo provisionamento da infraestrutura Kubernetes (EKS), rede, observabilidade e **Application Load Balancer (ALB)** na AWS utilizando **Terraform**.
+Faz parte da Fase 3 do Tech Challenge — repositório dedicado à infraestrutura central do cluster Kubernetes e exposição de serviços.
 
-## Tecnologias
+---
 
-- [Terraform](https://www.terraform.io/)
-- [AWS (Amazon Web Services)](https://aws.amazon.com/)
-- [Amazon EKS](https://aws.amazon.com/eks/)
-- [Floci / LocalStack](https://github.com/floci/floci) (emulação local)
-- [Docker Compose](https://docs.docker.com/compose/)
-- [GitHub Actions](https://github.com/features/actions)
-- Helm provider do Terraform para instalar a stack de observabilidade
-- Prometheus, Grafana e Alertmanager para métricas, dashboards e alertas
-- Loki, Tempo e OpenTelemetry Collector para logs estruturados e traces
-- Blackbox Exporter para sondas de uptime
-- Datadog Agent somente como alternativa futura opcional para AWS/EKS
+## 🚀 Tecnologias
 
-## Arquitetura
+- [Terraform](https://www.terraform.io/) (>= 1.5.0)
+- [AWS (Amazon Web Services)](https://aws.amazon.com/): VPC, Subnets, EKS, Application Load Balancer (ALB), IAM, Security Groups
+- [Amazon EKS](https://aws.amazon.com/eks/) (v1.35) com Managed Node Group
+- [AWS Application Load Balancer (ALB)](https://aws.amazon.com/elasticloadbalancing/application-load-balancer/): Exposição pública gerenciada via Terraform
+- Helm provider do Terraform para orquestração da stack de observabilidade
+- **Prometheus & Grafana**: Coleta de métricas e visualização de dashboards
+- **Loki & Grafana Tempo**: Centralização de logs estruturados e distributed tracing
+- **OpenTelemetry Collector**: Ingestão de telemetria da aplicação via OTLP (`:4318`)
+- **Blackbox Exporter**: Monitoramento de uptime e sondas HTTP
+- [Floci / LocalStack](https://github.com/floci/floci) (emulação local em Dev)
+
+---
+
+## 🏛️ Arquitetura
 
 O Terraform neste repositório provisiona:
 
-- **VPC** com 2 subnets públicas em AZs distintas, Internet Gateway e Route Tables.
-- **IAM Roles** para o EKS Control Plane e Node Group, com as policies necessárias.
-- **EKS Cluster** (v1.35) com Node Group (t3.micro, 1-3 nodes), Access Entries para o IAM User de deploy.
-- **Security Group** dedicado para o cluster EKS.
+- **VPC & Rede:** 2 subnets públicas em AZs distintas (`sa-east-1a` e `sa-east-1b`), Internet Gateway e Route Tables públicas associadas.
+- **IAM Roles:** Perfis gerenciados para o EKS Control Plane e Node Group com as policies necessárias (`AmazonEKSClusterPolicy`, `AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, `AmazonEC2ContainerRegistryReadOnly`, driver EBS CSI).
+- **EKS Cluster:** Cluster Kubernetes gerenciado com Node Group em instâncias `t3.small` (3 nós em produção para comportar a carga de pods de sistema, observabilidade e aplicação).
+- **Application Load Balancer (ALB):** ALB público provisionado via Terraform com listeners nas portas `80` (API) e `3000` (Grafana), associado diretamente aos nós do EKS via Target Groups e NodePorts (`30080` e `30300`), eliminando o uso de Classic ELBs do K8s e evitando travamento no `terraform destroy`.
+- **Stack de Observabilidade:** Namespace `monitoring` com Prometheus, Grafana, Alertmanager, Loki, Tempo e OTel Collector com volumes EBS persistentes (`gp3`).
 
-### Diagrama de Componentes
+### Diagrama de Arquitetura
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    AWS (sa-east-1)                   │
-│                                                     │
-│  ┌───────────────────────────────────────────────┐  │
-│  │                VPC (10.0.0.0/16)              │  │
-│  │                                               │  │
-│  │  ┌──────────────┐    ┌──────────────┐        │  │
-│  │  │ Subnet AZ-1a │    │ Subnet AZ-1b │        │  │
-│  │  └──────┬───────┘    └──────┬───────┘        │  │
-│  │         │                   │                 │  │
-│  │  ┌──────┴───────────────────┴───────┐        │  │
-│  │  │         EKS Cluster (v1.35)      │        │  │
-│  │  │  ┌─────────────────────────────┐ │        │  │
-│  │  │  │    Node Group (t3.micro)    │ │        │  │
-│  │  │  │    min: 1 | max: 3          │ │        │  │
-│  │  │  └─────────────────────────────┘ │        │  │
-│  │  │                                  │        │  │
-│  │  │  ns: techchallenge               │        │  │
-│  │  │  ┌─────────────────────────────┐ │        │  │
-│  │  │  │  API .NET  →  /metrics      │ │        │  │
-│  │  │  │  ServiceMonitor | Probe     │ │        │  │
-│  │  │  └──────────────┬──────────────┘ │        │  │
-│  │  │                 │ scrape / OTLP  │        │  │
-│  │  │  ns: monitoring ▼                │        │  │
-│  │  │  ┌─────────────────────────────┐ │        │  │
-│  │  │  │ Prometheus | Alertmanager   │ │        │  │
-│  │  │  │ Grafana    | Blackbox       │ │        │  │
-│  │  │  │ Loki | Tempo | OTel Collec. │ │        │  │
-│  │  │  │ PVCs gp3 (EBS CSI)          │ │        │  │
-│  │  │  └─────────────────────────────┘ │        │  │
-│  │  └──────────────────────────────────┘        │  │
-│  │                                               │  │
-│  └───────────────────────────────────────────────┘  │
-│                                                     │
-│  ┌───────────────┐  ┌────────────────────────────┐  │
-│  │  IAM Roles    │  │  S3 (Terraform State)      │  │
-│  │  - Cluster    │  │  key: k8s/terraform.tfstate │  │
-│  │  - Node Group │  └────────────────────────────┘  │
-│  └───────────────┘                                  │
-└─────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    AWS (sa-east-1)                                     │
+│                                                                                        │
+│   ┌────────────────────────────────────────────────────────────────────────────────┐   │
+│   │                 Application Load Balancer (Terraform - ALB)                    │   │
+│   │                 fiap-soat-terraform-alb-*.sa-east-1.elb.amazonaws.com          │   │
+│   └───────────────────────┬────────────────────────────────┬───────────────────────┘   │
+│                           │ :80                            │ :3000                     │
+│                           ▼                                ▼                           │
+│               ┌───────────────────────┐        ┌───────────────────────┐               │
+│               │ Target Group API      │        │ Target Group Grafana  │               │
+│               │ NodePort: 30080       │        │ NodePort: 30300       │               │
+│               │ Path: /health/live    │        │ Path: /api/health     │               │
+│               └───────────┬───────────┘        └───────────┬───────────┘               │
+│                           │                                │                           │
+│   ┌───────────────────────▼────────────────────────────────▼───────────────────────┐   │
+│   │                                VPC (10.0.0.0/16)                               │   │
+│   │                                                                                │   │
+│   │   Subnet AZ-1a (10.0.0.0/20)               Subnet AZ-1b (10.0.16.0/20)         │   │
+│   │   ┌──────────────────────────────────┐     ┌─────────────────────────────────┐ │   │
+│   │   │  EKS Node 1 & Node 2 (t3.small)  │     │  EKS Node 3 (t3.small)          │ │   │
+│   │   └─────────────────┬────────────────┘     └────────────────┬────────────────┘ │   │
+│   │                     │                                       │                  │   │
+│   │                     └───────────────────┬───────────────────┘                  │   │
+│   │                                         ▼                                      │   │
+│   │   ┌────────────────────────────────────────────────────────────────────────┐   │   │
+│   │   │                        Cluster EKS (v1.35)                             │   │   │
+│   │   │                                                                        │   │   │
+│   │   │   Namespace: techchallenge                                             │   │   │
+│   │   │   ┌───────────────────────────────────────────────────────────────┐    │   │   │
+│   │   │   │  Pod API .NET 8 (Clean Architecture)                          │    │   │   │
+│   │   │   │  - Service NodePort: 30080                                    │    │   │   │
+│   │   │   │  - Tracing OTLP HTTP → OTel Collector (:4318)                 │    │   │   │
+│   │   │   └───────────────────────────────┬───────────────────────────────┘    │   │   │
+│   │   │                                   │                                    │   │   │
+│   │   │   Namespace: monitoring           ▼                                    │   │   │
+│   │   │   ┌───────────────────────────────────────────────────────────────┐    │   │   │
+│   │   │   │  OpenTelemetry Collector (:4318)                              │    │   │   │
+│   │   │   │  kube-prometheus-stack (Prometheus, Alertmanager, NodeExp)    │    │   │   │
+│   │   │   │  Grafana UI (Service NodePort: 30300)                         │    │   │   │
+│   │   │   │  Grafana Loki (Logs) & Grafana Tempo (Traces)                 │    │   │   │
+│   │   │   └───────────────────────────────────────────────────────────────┘    │   │   │
+│   │   └────────────────────────────────────────────────────────────────────────┘   │   │
+│   └────────────────────────────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Estrutura do Repositório
+---
+
+## 📁 Estrutura do Repositório
 
 ```
 tech-challenge-infra-k8s/
 ├── modules/
-│   ├── networking/     # VPC, Subnets, IGW, Route Tables, Security Group
-│   ├── iam/            # IAM Roles e Policy Attachments do EKS
-│   ├── eks/            # EKS Cluster, Node Group, Access Entries
-│   └── observability/  # kube-prometheus-stack, Blackbox, Loki, Tempo, OTel Collector
-│       └── values/     # Helm values de cada componente
+│   ├── networking/       # VPC, Subnets públicas, IGW, Route Tables e Security Group
+│   ├── iam/              # IAM Roles e Policies do EKS e OIDC EBS CSI
+│   ├── eks/              # EKS Cluster, Node Group (t3.small), Access Entries
+│   ├── load-balancer/    # ALB compartilhado, Target Groups (API/Grafana) e Listeners
+│   └── observability/    # Helm: Prometheus, Grafana (NodePort 30300), Loki, Tempo, OTel
+│       └── values/       # Values de cada componente da stack
 ├── environments/
-│   ├── dev/            # Desenvolvimento local (Floci compartilhado)
-│   │   ├── docker-compose.yml   # Referência → usar o Floci da raiz do workspace
-│   │   ├── providers.tf         # Endpoints apontam para localhost:4566
-│   │   ├── main.tf              # Orquestra módulos contra Floci
-│   │   ├── variables.tf         # Defaults seguros para teste local
-│   │   └── outputs.tf
-│   └── prod/           # Produção na AWS
-│       ├── providers.tf         # Backend S3, provider AWS real
-│       ├── main.tf              # Orquestra módulos na AWS
-│       ├── variables.tf         # Variáveis de produção
-│       ├── outputs.tf
-│       └── terraform.tfvars.example
-├── observability/      # Instalação avulsa via script + alternativa Datadog
-│   ├── install-grafana.sh
-│   ├── kube-prometheus-values.yaml
-│   └── datadog-*.json / install-datadog.sh
-└── .github/workflows/
-    ├── pr.yml          # CI: terraform fmt, validate, plan
-    └── deploy.yml      # CD: terraform apply
+│   ├── dev/              # Desenvolvimento local (Floci compartilhado)
+│   └── prod/             # Produção na AWS (backend S3 remoto)
+│       ├── providers.tf  # Backend S3, provider AWS, kubernetes, helm
+│       ├── main.tf       # Orquestração dos módulos na AWS
+│       ├── variables.tf  # Variáveis de produção
+│       └── outputs.tf    # URLs públicas do ALB, dados de rede e endpoints
 ```
 
-## Observabilidade
+---
 
-O caminho oficial é o módulo Terraform [`modules/observability`](modules/observability/),
-aplicado junto com o cluster. Ele instala:
+## 📋 Outputs Disponíveis
 
-| Componente | Papel |
-|---|---|
-| kube-prometheus-stack | Prometheus, Alertmanager, Grafana, kube-state-metrics e node-exporter |
-| Blackbox Exporter | sondas HTTP do `/health/ready` (uptime) |
-| Loki | logs estruturados JSON da API e da Lambda |
-| Tempo | traces distribuídos, correlacionados aos logs por `correlation_id` |
-| OpenTelemetry Collector | recebe OTLP da aplicação e encaminha para Loki e Tempo |
-| StorageClass `gp3` | volumes EBS dos PVCs de Prometheus, Loki e Tempo |
+Estes outputs são gerados no `terraform apply` e consumidos por outros módulos (como o banco de dados via `terraform_remote_state`):
 
-A cobertura inclui latência p95, volume diário de ordens, tempo médio de
-Diagnóstico/Execução/Finalização, falhas de processamento, erros de integrações,
-disponibilidade do deployment, uptime das sondas e consumo de CPU/memória — com alertas
-de CPU, memória, CrashLoopBackOff, OOMKill e reinícios definidos em
-`k8s/observability/prometheusrule.yaml` no repositório da aplicação.
+| Output | Descrição | Exemplo |
+|---|---|---|
+| `alb_dns_name` | Hostname público do Application Load Balancer | `fiap-soat-terraform-alb-*.sa-east-1.elb.amazonaws.com` |
+| `api_swagger_url` | URL direta para o Swagger UI da API | `http://<alb-dns>/swagger` |
+| `api_url` | Endpoint raiz da API | `http://<alb-dns>` |
+| `grafana_url` | URL direta para a interface do Grafana | `http://<alb-dns>:3000` |
+| `otel_collector_endpoint` | Endpoint interno de ingestão OTLP no K8s | `http://opentelemetry-collector.monitoring.svc.cluster.local:4318` |
+| `vpc_id` | ID da VPC criada | `vpc-072e043dd5fc4fb25` |
+| `subnet_ids` | Lista com os IDs das Subnets públicas | `["subnet-...", "subnet-..."]` |
+| `security_group_id` | ID do Security Group dos nós do EKS | `sg-021bb6c63f447ca27` |
+| `eks_cluster_name` | Nome do cluster EKS | `eks-fiap-soat-terraform` |
 
-Por padrão o Alertmanager usa o receiver `null` (alertas visíveis na interface, sem
-envio). Defina `TF_VAR_alertmanager_slack_webhook_url` ou `TF_VAR_alertmanager_webhook_url`
-para roteá-los ao destino da equipe. Detalhes em [observability/README.md](observability/README.md).
+---
 
-A escolha de Prometheus/Grafana em vez de Datadog ou New Relic está justificada no
-[ADR-003](https://github.com/SOAT-FIAP-2026/fase1-tech-challenge/blob/main/docs/adrs/ADR-003-observability-stack.md).
-A configuração do Datadog continua versionada em `observability/` apenas como alternativa
-futura para um ambiente AWS/EKS real e não é necessária para atender aos requisitos.
+## 🛠️ Passo a Passo Completo: Como Rodar do Zero
 
-## API relacionada
+### Pré-Requisitos
+1. **AWS CLI v2** configurado com credenciais válidas (`aws configure`).
+2. **Terraform >= 1.5.0** instalado.
+3. **kubectl >= 1.28** instalado.
+4. **Helm 3** instalado.
+5. **gettext-base** (`envsubst`) instalado no Linux/macOS.
+6. **Docker** logado localmente (`docker login`).
 
-Este repositório não expõe uma API de negócio. A documentação Swagger da aplicação está em https://github.com/SOAT-FIAP-2026/fase1-tech-challenge e, localmente, em http://localhost:8080/swagger.
+---
 
-## Ambientes
-
-### Dev (Local com Floci)
-
-O ambiente de desenvolvimento emula os serviços AWS localmente usando [Floci](https://github.com/floci/floci).
-O estado do Terraform é armazenado **localmente** (`terraform.tfstate`).
-
-> **Nota:** O Floci é uma instância **compartilhada** entre todos os repos de infra.
-> Suba-o uma única vez na raiz do workspace (`FIAP - TC/`).
-
-```bash
-# 1. Subir o Floci compartilhado (se ainda não estiver rodando)
-cd "FIAP - TC/"
-docker compose up -d
-
-# 2. Rodar Terraform
-cd tech-challenge-infra-k8s/environments/dev
-terraform init
-terraform plan
-terraform apply
-
-# 3. Verificar outputs
-terraform output
-
-# Para destruir recursos emulados
-terraform destroy
-```
-
-**O que é validado em dev:**
-- Sintaxe e estrutura dos módulos Terraform
-- Wiring correto entre módulos (networking → iam → eks)
-- Outputs e dependências inter-módulos
-
-### Prod (AWS)
-
-O ambiente de produção provisiona recursos reais na AWS.
-O estado é armazenado **remotamente** em S3 (`k8s/terraform.tfstate`).
-
+### Passo 1: Provisionar EKS, ALB e Observabilidade
+Execute o Terraform no ambiente de produção deste repositório:
 ```bash
 cd environments/prod
-
-# Inicializar o Terraform (requer acesso ao bucket S3)
 terraform init
+terraform apply -auto-approve
+```
+*Tempo aproximado:* 15 a 20 minutos (tempo padrão da AWS para criar o Control Plane do EKS e o ALB).
 
-# Verificar o plano de execução
-terraform plan
+---
 
-# Aplicar a infraestrutura
-terraform apply
+### Passo 2: Configurar o Acesso ao EKS via Kubectl
+Atualize o arquivo `~/.kube/config` para apontar para o novo cluster:
+```bash
+aws eks update-kubeconfig \
+  --name eks-fiap-soat-terraform \
+  --region sa-east-1
+```
+Confirme se os 3 nós do Node Group estão com status `Ready`:
+```bash
+kubectl get nodes
 ```
 
-## Isolamento de Estado
+---
 
+### Passo 3: Provisionar o Banco de Dados RDS PostgreSQL
+No repositório do banco de dados, inicialize e aplique o Terraform. O RDS obtém os IDs de VPC, Subnets e Security Groups **automaticamente** via Remote State do S3:
+```bash
+cd "../../../tech-challenge-infra-db/environments/prod"
+terraform init
+terraform apply -auto-approve
 ```
-environments/
-├── dev/
-│   └── terraform.tfstate    ← Estado LOCAL (nunca comitado)
-└── prod/
-    └── (S3 remoto)          ← s3://fiap-soat-techchallenge-backend/k8s/terraform.tfstate
+*Tempo aproximado:* 5 a 10 minutos.
+
+---
+
+### Passo 4: Instalar Monitores e Dashboards no Kubernetes
+No repositório da aplicação, aplique os recursos de monitoramento (ServiceMonitors, PrometheusRules e ConfigMap do Grafana Dashboard):
+```bash
+cd "../../../fase1-tech-challenge"
+./k8s/observability/install.sh
 ```
 
-Cada ambiente tem seu próprio `terraform init` e `terraform apply`, executados **dentro da sua respectiva pasta**.
-Os estados nunca são compartilhados entre ambientes.
+---
 
-## CI/CD e Deploy Automático
+### Passo 5: Fazer o Deploy da Aplicação .NET
+Execute o script de deploy automatizado:
+```bash
+cd "../../../fase1-tech-challenge"
+./k8s/overlays/aws/deploy.sh
+```
+O script automatiza todas as dependências:
+- Consulta o endpoint do RDS PostgreSQL ativo via AWS CLI.
+- Gera o `secrets.yaml` com encoding `base64 -w0` (sem quebras de linha).
+- Injeta o segredo de autenticação do Docker Hub a partir de `~/.docker/config.json`.
+- Aplica os manifestos Kubernetes e aguarda o pod ficar `Ready`.
 
-- **Pull Request** → `terraform fmt -check`, `terraform validate`, `terraform plan`
-- **Merge para main** → `terraform apply -auto-approve`
+---
 
-## Outputs Disponíveis
+## 🔍 Validação e URLs de Acesso
 
-Estes outputs são consumidos por outros repositórios via `terraform_remote_state`:
+Após a conclusão dos passos acima, todos os serviços estarão acessíveis através do Application Load Balancer:
 
-| Output | Descrição |
-|---|---|
-| `vpc_id` | ID da VPC |
-| `vpc_cidr_block` | CIDR block da VPC |
-| `subnet_ids` | IDs das subnets públicas |
-| `security_group_id` | ID do Security Group principal |
-| `eks_cluster_name` | Nome do cluster EKS |
-| `eks_cluster_endpoint` | Endpoint do API server do EKS |
+| Serviço | URL de Acesso | Porta | Status Esperado |
+|---|---|---|---|
+| **API Swagger UI** | `http://<alb-dns>/swagger` | 80 | **HTTP 200 OK** |
+| **API Health Check** | `http://<alb-dns>/health/live` | 80 | **HTTP 200 OK** |
+| **Grafana UI** | `http://<alb-dns>:3000` | 3000 | **HTTP 200 OK** |
 
-## Pré-Requisitos
+### Comandos de Teste Rápido
+```bash
+# Obter DNS do ALB
+ALB_DNS=$(terraform -chdir="environments/prod" output -raw alb_dns_name)
 
-### Dev (Local)
-- Docker e Docker Compose instalados
+# Validar Swagger da API
+curl -s -L -o /dev/null -w "Swagger HTTP Status: %{http_code}\n" http://${ALB_DNS}/swagger
 
-### Prod (AWS)
-- Conta ativa na AWS
-- Chaves de acesso AWS configuradas localmente (`~/.aws/credentials`) ou no GitHub Secrets
-- Terraform >= 1.5.0 instalado
-- Bucket S3 `fiap-soat-techchallenge-backend` criado para o state backend
-- IAM User `terraform-user` criado na conta AWS
+# Validar Grafana
+curl -s -L -o /dev/null -w "Grafana HTTP Status: %{http_code}\n" http://${ALB_DNS}:3000
 
-## Repositórios Relacionados
+# Checar logs e envio de traces da API para o OTel Collector
+kubectl logs deployment/api -n techchallenge --tail=20
+```
+
+---
+
+## 🛑 Como Destruir a Infraestrutura com Segurança
+
+A destruição gerenciada pelo Terraform não causa mais erros de dependência. Para destruir todos os recursos de forma limpa, siga a ordem:
+
+1. **Remover os pods e serviços da aplicação:**
+   ```bash
+   kubectl delete namespace techchallenge
+   ```
+2. **Destruir o banco de dados RDS:**
+   ```bash
+   cd "../tech-challenge-infra-db/environments/prod"
+   terraform destroy -auto-approve
+   ```
+3. **Destruir o cluster EKS, ALB e componentes de rede:**
+   ```bash
+   cd "../tech-challenge-infra-k8s/environments/prod"
+   terraform destroy -auto-approve
+   ```
+
+---
+
+## 🔗 Repositórios Relacionados
 
 | Repositório | Descrição |
 |---|---|
-| [fase1-tech-challenge](https://github.com/SOAT-FIAP-2026/fase1-tech-challenge) | Aplicação principal (.NET) executando em Kubernetes |
-| [tech-challenge-infra-db](https://github.com/SOAT-FIAP-2026/tech-challenge-infra-db) | Infraestrutura do Banco de Dados Gerenciado (RDS) |
+| [fase1-tech-challenge](https://github.com/SOAT-FIAP-2026/fase1-tech-challenge) | Aplicação principal (.NET 8 Clean Architecture) executando no EKS |
+| [tech-challenge-infra-db](https://github.com/SOAT-FIAP-2026/tech-challenge-infra-db) | Infraestrutura do Banco de Dados Gerenciado (AWS RDS PostgreSQL) |

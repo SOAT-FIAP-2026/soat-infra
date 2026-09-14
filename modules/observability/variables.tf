@@ -21,9 +21,9 @@ variable "grafana_admin_password" {
 }
 
 variable "grafana_service_type" {
-  description = "Tipo do Service do Grafana. LoadBalancer para acesso externo na AWS, ClusterIP para acesso interno."
+  description = "Tipo do Service do Grafana. NodePort para ALB gerenciado pelo Terraform, LoadBalancer para Classic ELB, ClusterIP para acesso interno."
   type        = string
-  default     = "LoadBalancer"
+  default     = "NodePort"
 }
 
 variable "enable_loki" {
