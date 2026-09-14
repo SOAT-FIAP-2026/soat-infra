@@ -37,6 +37,12 @@ module "eks" {
   instance_types      = var.instance_types
   terraform_user_arn  = data.aws_iam_user.terraform_user.arn
 
+  # Capacidade do Node Group: 3 nós garantem slots suficientes de pods (max 11 pods/nó em t3.small)
+  # para a stack de observabilidade (Prometheus, Loki, Tempo, OTel) e a aplicação .NET.
+  desired_size = 3
+  max_size     = 4
+  min_size     = 2
+
   # EBS CSI Driver — necessário para PVCs da stack de observabilidade
   create_ebs_csi_driver = true
   ebs_csi_role_arn      = module.iam.ebs_csi_role_arn
@@ -70,8 +76,8 @@ module "lambda" {
   environment_variables = {
     DB_CONNECTION_STRING   = var.db_connection_string
     JWT_SECRET             = var.jwt_secret
-    JWT_ISSUER             = "fiap-tech-challenge"
-    JWT_AUDIENCE           = "fiap-api"
+    JWT_ISSUER             = "TechChallenge"
+    JWT_AUDIENCE           = "techchallenge.com.br"
     JWT_EXPIRES_IN_SECONDS = var.jwt_expires_in_seconds
   }
 }
@@ -113,13 +119,33 @@ module "observability" {
 
   project_name           = var.project_name
   grafana_admin_password = var.grafana_admin_password
-  grafana_service_type   = "LoadBalancer"
+  grafana_service_type   = "NodePort"
 
   # Destino real dos alertas. Vazio mantem o receiver "null": os alertas continuam
   # visiveis no Alertmanager, apenas sem notificacao externa.
   alertmanager_slack_webhook_url = var.alertmanager_slack_webhook_url
   alertmanager_slack_channel     = var.alertmanager_slack_channel
   alertmanager_webhook_url       = var.alertmanager_webhook_url
+
+  depends_on = [module.eks]
+}
+
+# --- Módulo: Load Balancer (ALB) ---------------------------------------------
+# Application Load Balancer gerenciado 100% pelo Terraform:
+#   - Porta 80   → API .NET (NodePort 30080)
+#   - Porta 3000 → Grafana (NodePort 30300)
+# Garante URLs públicas no 'outputs' e destroy limpo sem ENIs presas na VPC.
+module "load_balancer" {
+  source = "../../modules/load-balancer"
+
+  project_name           = var.project_name
+  vpc_id                 = module.networking.vpc_id
+  subnet_ids             = module.networking.public_subnet_ids
+  autoscaling_group_name = module.eks.node_group_autoscaling_group_name
+  node_security_group_id = module.eks.cluster_security_group_id
+
+  api_node_port     = 30080
+  grafana_node_port = 30300
 
   depends_on = [module.eks]
 }

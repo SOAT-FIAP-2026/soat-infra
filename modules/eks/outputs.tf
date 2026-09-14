@@ -19,3 +19,13 @@ output "oidc_issuer_url" {
   value       = aws_eks_cluster.main.identity[0].oidc[0].issuer
 }
 
+output "node_group_autoscaling_group_name" {
+  description = "Nome do Auto Scaling Group associado ao Node Group do EKS"
+  value       = var.create_node_group && length(aws_eks_node_group.main) > 0 ? aws_eks_node_group.main[0].resources[0].autoscaling_groups[0].name : ""
+}
+
+output "cluster_security_group_id" {
+  description = "ID do Security Group gerenciado pelo EKS anexado ao cluster e aos nós"
+  value       = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}
+

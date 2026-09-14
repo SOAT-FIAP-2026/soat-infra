@@ -46,6 +46,24 @@ variable "create_access_entries" {
   default     = true
 }
 
+variable "desired_size" {
+  description = "Quantidade desejada de nós no Node Group"
+  type        = number
+  default     = 3
+}
+
+variable "max_size" {
+  description = "Quantidade máxima de nos no Node Group"
+  type        = number
+  default     = 4
+}
+
+variable "min_size" {
+  description = "Quantidade mínima de nós no Node Group"
+  type        = number
+  default     = 2
+}
+
 # Dependências explícitas dos policy attachments (passadas como any para depends_on)
 variable "cluster_policy_attachment_dep" {
   description = "Referência ao cluster IAM policy attachment — garante ordem de criação/destruição"

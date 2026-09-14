@@ -68,12 +68,33 @@ output "eks_cluster_ca_certificate" {
 
 # ── Observabilidade ──────────────────────────────────────────────────────────
 output "grafana_access" {
-  description = "Comando para obter o endereço externo do Grafana"
-  value       = "kubectl get svc -n monitoring kube-prometheus-stack-grafana -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'"
+  description = "URL pública de acesso ao Grafana via ALB"
+  value       = module.load_balancer.grafana_url
 }
 
 output "otel_collector_endpoint" {
   description = "Endpoint OTLP interno — configurar no ConfigMap da aplicação"
   value       = module.observability.otel_collector_endpoint
+}
+
+# ── Load Balancer (URLs Públicas) ─────────────────────────────────────────────
+output "alb_dns_name" {
+  description = "DNS público do Application Load Balancer"
+  value       = module.load_balancer.dns_name
+}
+
+output "api_url" {
+  description = "URL pública base da API .NET"
+  value       = module.load_balancer.api_url
+}
+
+output "api_swagger_url" {
+  description = "URL pública da documentação Swagger da API"
+  value       = module.load_balancer.api_swagger_url
+}
+
+output "grafana_url" {
+  description = "URL pública do Grafana (porta 3000)"
+  value       = module.load_balancer.grafana_url
 }
 
