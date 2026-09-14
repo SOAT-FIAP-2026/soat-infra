@@ -52,3 +52,15 @@ variable "node_security_group_id" {
   type        = string
   default     = ""
 }
+
+variable "enable_autoscaling_attachment" {
+  description = "Define se os Target Groups devem ser associados ao Auto Scaling Group dos nós"
+  type        = bool
+  default     = true
+}
+
+variable "enable_node_security_group_rule" {
+  description = "Define se a regra de ingress no Security Group dos nós deve ser criada"
+  type        = bool
+  default     = true
+}
