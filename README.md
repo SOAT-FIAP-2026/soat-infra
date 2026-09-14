@@ -1,6 +1,6 @@
 # Tech Challenge - Infraestrutura Kubernetes & Load Balancer (Terraform)
 
-Consulte a [validação de 07/09/2026](docs/validation.md) para limites do ambiente local,
+Consulte o arquivo de [validação](docs/validation.md) para entender limites do ambiente local,
 resultados das verificações e pendências de CI/CD e proteção de branches.
 
 Repositório responsável pelo provisionamento da infraestrutura Kubernetes (EKS), rede, observabilidade e **Application Load Balancer (ALB)** na AWS utilizando **Terraform**.
