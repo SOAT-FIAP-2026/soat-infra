@@ -56,12 +56,14 @@ variable "db_connection_string" {
   description = "Connection string do PostgreSQL RDS para a Lambda"
   type        = string
   sensitive   = true
+  default     = "Host=placeholder.rds.amazonaws.com;Port=5432;Database=techchallengedb;Username=postgres;Password=placeholder"
 }
 
 variable "jwt_secret" {
   description = "Segredo para assinar os tokens JWT — deve ter no mínimo 32 caracteres"
   type        = string
   sensitive   = true
+  default     = "chave-secreta-jwt-techchallenge-fiap-2026-segura"
 }
 
 variable "jwt_expires_in_seconds" {
