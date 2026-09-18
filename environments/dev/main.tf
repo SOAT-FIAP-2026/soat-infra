@@ -39,7 +39,7 @@ module "eks" {
   subnet_ids            = module.networking.public_subnet_ids
   security_group_id     = module.networking.main_security_group_id
   instance_types        = var.instance_types
-  terraform_user_arn    = "arn:aws:iam::000000000000:user/terraform-user"
+  terraform_user_arn    = "arn:aws:iam::000000000000:user/fiap-soat"
   create_node_group     = false
   create_access_entries = false
   create_ebs_csi_driver = false

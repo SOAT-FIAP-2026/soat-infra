@@ -4,7 +4,7 @@
 
 # --- Data Sources -------------------------------------------------------------
 data "aws_iam_user" "terraform_user" {
-  user_name = "terraform-user"
+  user_name = "fiap-soat"
 }
 
 # --- Módulo: Networking -------------------------------------------------------
@@ -74,6 +74,19 @@ data "aws_ssm_parameter" "jwt_audience" {
   name = "/techchallenge/prod/jwt_audience"
 }
 
+# --- Lambda: Placeholder do Pacote no S3 --------------------------------------
+# Garante que um ZIP válido exista no S3 para o primeiro apply caso o CI/CD
+# ainda não tenha feito upload do pacote compilado.
+resource "aws_s3_object" "lambda_package_placeholder" {
+  bucket         = var.lambda_s3_bucket
+  key            = var.lambda_s3_key
+  content_base64 = "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==" # ZIP vazio válido (22 bytes)
+
+  lifecycle {
+    ignore_changes = [content_base64, etag, version_id]
+  }
+}
+
 # --- Módulo: Lambda -----------------------------------------------------------
 # Pacote carregado do S3 — o CI/CD faz 'dotnet lambda package' e faz upload
 # antes do 'terraform apply', garantindo que o objeto exista no bucket.
@@ -103,6 +116,8 @@ module "lambda" {
     JWT_AUDIENCE           = data.aws_ssm_parameter.jwt_audience.value
     JWT_EXPIRES_IN_SECONDS = var.jwt_expires_in_seconds
   }
+
+  depends_on = [aws_s3_object.lambda_package_placeholder]
 }
 
 # --- Módulo: API Gateway ------------------------------------------------------
