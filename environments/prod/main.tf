@@ -53,6 +53,27 @@ module "eks" {
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
 }
 
+# --- SSM Parameter Store — Leitura de segredos para a Lambda ------------------
+# Os parâmetros são criados pelo módulo bootstrap e atualizados pelo soat-db.
+# A Lambda os consome em deploy-time como variáveis de ambiente.
+data "aws_ssm_parameter" "db_connection_string" {
+  name            = "/techchallenge/prod/db_connection_string"
+  with_decryption = true
+}
+
+data "aws_ssm_parameter" "jwt_secret" {
+  name            = "/techchallenge/prod/jwt_secret"
+  with_decryption = true
+}
+
+data "aws_ssm_parameter" "jwt_issuer" {
+  name = "/techchallenge/prod/jwt_issuer"
+}
+
+data "aws_ssm_parameter" "jwt_audience" {
+  name = "/techchallenge/prod/jwt_audience"
+}
+
 # --- Módulo: Lambda -----------------------------------------------------------
 # Pacote carregado do S3 — o CI/CD faz 'dotnet lambda package' e faz upload
 # antes do 'terraform apply', garantindo que o objeto exista no bucket.
@@ -73,11 +94,13 @@ module "lambda" {
 
   log_retention_days = 14
 
+  # Credenciais e claims JWT lidas diretamente do SSM Parameter Store.
+  # Elimina a necessidade de copiar manualmente strings de conexão ou segredos.
   environment_variables = {
-    DB_CONNECTION_STRING   = var.db_connection_string
-    JWT_SECRET             = var.jwt_secret
-    JWT_ISSUER             = "TechChallenge"
-    JWT_AUDIENCE           = "techchallenge.com.br"
+    DB_CONNECTION_STRING   = data.aws_ssm_parameter.db_connection_string.value
+    JWT_SECRET             = data.aws_ssm_parameter.jwt_secret.value
+    JWT_ISSUER             = data.aws_ssm_parameter.jwt_issuer.value
+    JWT_AUDIENCE           = data.aws_ssm_parameter.jwt_audience.value
     JWT_EXPIRES_IN_SECONDS = var.jwt_expires_in_seconds
   }
 }
@@ -148,4 +171,12 @@ module "load_balancer" {
   grafana_node_port = 30300
 
   depends_on = [module.eks]
+}
+
+# --- SSM: Publicação do DNS do ALB --------------------------------------------
+resource "aws_ssm_parameter" "alb_dns" {
+  name      = "/techchallenge/prod/alb_dns"
+  type      = "String"
+  value     = module.load_balancer.dns_name
+  overwrite = true
 }
