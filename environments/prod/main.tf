@@ -54,12 +54,8 @@ module "eks" {
 }
 
 # --- SSM Parameter Store — Leitura de segredos para a Lambda ------------------
-# Os parâmetros são criados pelo módulo bootstrap e atualizados pelo soat-db.
-# A Lambda os consome em deploy-time como variáveis de ambiente.
-data "aws_ssm_parameter" "db_connection_string" {
-  name            = "/techchallenge/prod/db_connection_string"
-  with_decryption = true
-}
+# Os parâmetros de token JWT são lidos aqui. A string de conexão com o RDS é
+# resolvida dinamicamente pela própria Lambda em tempo de execução via SSM.
 
 data "aws_ssm_parameter" "jwt_secret" {
   name            = "/techchallenge/prod/jwt_secret"
@@ -78,12 +74,13 @@ data "aws_ssm_parameter" "jwt_audience" {
 # Garante que um ZIP válido exista no S3 para o primeiro apply caso o CI/CD
 # ainda não tenha feito upload do pacote compilado.
 resource "aws_s3_object" "lambda_package_placeholder" {
-  bucket         = var.lambda_s3_bucket
-  key            = var.lambda_s3_key
-  content_base64 = "UEsFBgAAAAAAAAAAAAAAAAAAAAAAAA==" # ZIP vazio válido (22 bytes)
+  bucket = var.lambda_s3_bucket
+  key    = var.lambda_s3_key
+  # ZIP contendo placeholder.txt para atender à validação da AWS Lambda (que rejeita zips vazios)
+  content_base64 = "UEsDBAoAAAAAALGMM10ggSzcDAAAAAwAAAAPABwAcGxhY2Vob2xkZXIudHh0VVQJAAOO8q5qjvKuanV4CwABBOgDAAAE6AMAAHBsYWNlaG9sZGVyClBLAQIeAwoAAAAAALGMM10ggSzcDAAAAAwAAAAPABgAAAAAAAEAAAC0gQAAAABwbGFjZWhvbGRlci50eHRVVAUAA47yrmp1eAsAAQToAwAABOgDAABQSwUGAAAAAAEAAQBVAAAAVQAAAAAA"
 
   lifecycle {
-    ignore_changes = [content_base64, etag, version_id]
+    ignore_changes = [content_base64, etag]
   }
 }
 
@@ -107,14 +104,19 @@ module "lambda" {
 
   log_retention_days = 14
 
+  # Rede VPC: conecta a Lambda na mesma VPC para alcançar o RDS PostgreSQL
+  subnet_ids         = module.networking.public_subnet_ids
+  security_group_ids = [module.networking.main_security_group_id]
+
   # Credenciais e claims JWT lidas diretamente do SSM Parameter Store.
-  # Elimina a necessidade de copiar manualmente strings de conexão ou segredos.
+  # A connection string do RDS é resolvida dinamicamente pela própria Lambda
+  # no cold start a partir do parâmetro SSM indicado abaixo.
   environment_variables = {
-    DB_CONNECTION_STRING   = data.aws_ssm_parameter.db_connection_string.value
-    JWT_SECRET             = data.aws_ssm_parameter.jwt_secret.value
-    JWT_ISSUER             = data.aws_ssm_parameter.jwt_issuer.value
-    JWT_AUDIENCE           = data.aws_ssm_parameter.jwt_audience.value
-    JWT_EXPIRES_IN_SECONDS = var.jwt_expires_in_seconds
+    SSM_DB_CONNECTION_STRING_PARAM = "/techchallenge/prod/db_connection_string"
+    JWT_SECRET                     = data.aws_ssm_parameter.jwt_secret.value
+    JWT_ISSUER                     = data.aws_ssm_parameter.jwt_issuer.value
+    JWT_AUDIENCE                   = data.aws_ssm_parameter.jwt_audience.value
+    JWT_EXPIRES_IN_SECONDS         = var.jwt_expires_in_seconds
   }
 
   depends_on = [aws_s3_object.lambda_package_placeholder]

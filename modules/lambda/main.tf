@@ -25,6 +25,41 @@ resource "aws_iam_role_policy_attachment" "basic_exec" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy_attachment" "vpc_exec" {
+  count      = length(var.subnet_ids) > 0 ? 1 : 0
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
+# --- IAM Policy: Permissão de leitura no SSM Parameter Store e KMS ------------
+# Permite à Lambda resolver a connection string e outros parâmetros em runtime
+resource "aws_iam_role_policy" "lambda_ssm" {
+  name = "${var.function_name}-ssm-read"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/techchallenge/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # --- CloudWatch Log Group -----------------------------------------------------
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.function_name}"
@@ -51,8 +86,19 @@ resource "aws_lambda_function" "auth" {
     variables = var.environment_variables
   }
 
+  dynamic "vpc_config" {
+    for_each = length(var.subnet_ids) > 0 ? [1] : []
+
+    content {
+      subnet_ids         = var.subnet_ids
+      security_group_ids = var.security_group_ids
+    }
+  }
+
   depends_on = [
     aws_iam_role_policy_attachment.basic_exec,
+    aws_iam_role_policy_attachment.vpc_exec,
+    aws_iam_role_policy.lambda_ssm,
     aws_cloudwatch_log_group.lambda,
   ]
 }

@@ -1,87 +1,163 @@
 # Guia Operacional da Equipe — Tech Challenge Fase 3
 
-Guia prático para os 4 integrantes da equipe gerenciarem a infraestrutura AWS do projeto.
+Guia prático para os integrantes da equipe gerenciarem e operarem a infraestrutura AWS, publicarem os serviços e validarem a solução ponta a ponta.
 
 ---
 
 ## Pré-Requisitos
 
 - [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5.0
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) configurado com credenciais válidas (`aws configure`)
-- Acesso à conta AWS do projeto na região `sa-east-1`
+- [AWS CLI v2](https://docs.aws.amazon.com/cli/latest/userguide/install-cliv2.html) configurado com credenciais válidas (`aws configure`) na região `sa-east-1`
+- [kubectl](https://kubernetes.io/docs/tasks/tools/) >= 1.28
+- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) e utilitário `zip`
+- `envsubst` (`sudo apt install gettext-base`)
 
 ---
 
-## Passo 0: Bootstrap Permanente (Executar UMA ÚNICA VEZ — feito pelo líder da equipe)
+## Passo 0: Bootstrap Permanente (Executar UMA ÚNICA VEZ)
 
-> ⚠️ **NUNCA execute `terraform destroy` nesta pasta.** O bootstrap é permanente.
+> ⚠️ **NUNCA execute `terraform destroy` nesta pasta.** O bootstrap é permanente e armazena os estados remotos e parâmetros da equipe.
 
 ```bash
 cd soat-infra/bootstrap
 
 terraform init
-
-# Será solicitado: initial_jwt_secret (min 32 chars) e initial_db_password
 terraform apply
 ```
 
-Após o apply, anote o output `state_bucket_name` — ele será o nome do bucket nos backends dos módulos efêmeros. O nome segue o padrão: `soat-fiap-backend-tfstate`.
-
-### Verificação
-
-No Console AWS, confirme:
-1. **S3** → Bucket `soat-fiap-backend-tfstate` existe com versionamento habilitado.
-2. **DynamoDB** → Tabela `soat-fiap-terraform-locks` existe.
-3. **Systems Manager → Parameter Store** → Os parâmetros em `/techchallenge/prod/*` estão visíveis.
+Após o apply, confirme que foram criados:
+1. **S3** → Bucket `soat-fiap-backend-tfstate` (versionamento e criptografia SSE).
+2. **DynamoDB** → Tabela `soat-fiap-terraform-locks` (controle de concorrência).
+3. **SSM Parameter Store** → Parâmetros base em `/techchallenge/prod/*`.
 
 ---
 
-## Passo 1: Subir o Ambiente Completo (Qualquer integrante)
+## Passo 1: Subida do Ecossistema Completo
 
-A ordem de execução é importante pois existe dependência entre os módulos:
+A ordem de execução é linear, com cada módulo Terraform executado **uma única vez** (sem re-apply).
 
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ 1.1 soat-infra  │ ──> │  1.2 soat-db    │ ──> │ 1.3 Lambda Code │ ──> │ 1.4 K8s Deploy  │ ──> │ 1.5 Dashboards  │
+│ VPC, EKS, ALB   │     │ RDS PostgreSQL  │     │ Publica C# .NET │     │ Migrations+API  │     │ Grafana+Metrics │
+└─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+### 1.1. Subir a Infraestrutura Base (VPC, EKS, ALB, Observabilidade e Lambda)
 ```bash
-# 1. Subir EKS, ALB, VPC, Observabilidade e Lambda Auth
-#    (na primeira vez a Lambda lerá valores placeholder do SSM para db_connection_string
-#     até o RDS ser criado no passo seguinte)
 cd soat-infra/environments/prod
 terraform init
 terraform apply -auto-approve
+```
+⏱️ *Tempo estimado: ~15 a 20 minutos.*
 
-# 2. Subir o RDS PostgreSQL
-#    (lê a VPC do EKS via Remote State e publica endpoint + connection string no SSM)
+### 1.2. Subir o Banco de Dados (RDS PostgreSQL)
+```bash
 cd ../../../soat-db/environments/prod
 terraform init
 terraform apply -auto-approve
+```
+⏱️ *Tempo estimado: ~5 a 10 minutos.*  
+*O RDS lê a VPC do EKS via Remote State e grava automaticamente a string de conexão em `/techchallenge/prod/db_connection_string` no SSM.*
 
-# 3. Re-apply do soat-infra para a Lambda capturar a connection string publicada pelo RDS
-cd ../../../soat-infra/environments/prod
-terraform apply -auto-approve
+### 1.3. Publicar o Código da Lambda de Autenticação
+A Lambda foi provisionada na etapa 1.1 com suporte a resolução dinâmica de segredos no SSM. Agora, compile e publique o pacote .NET 8 com a regra de negócio:
+```bash
+cd ../../../lambda-auth-function/src/Fiap.TechChallenge.LambdaAuth
+
+# Compilar e empacotar
+dotnet publish -c Release -o /tmp/lambda-publish
+cd /tmp/lambda-publish && zip -r /tmp/lambda-auth.zip .
+
+# Atualizar o código da função na AWS
+aws lambda update-function-code \
+  --function-name fiap-soat-terraform-lambda-auth \
+  --zip-file fileb:///tmp/lambda-auth.zip \
+  --region sa-east-1
 ```
 
-### Verificação
+### 1.4. Iniciar a Aplicação e Executar Migrações no EKS
+Conecte o `kubectl` ao cluster provisionado e faça o deploy dos manifestos. Ao inicializar, a API .NET executa automaticamente as migrações do EF Core e o seed dos clientes (incluindo o CPF padrão para testes):
 
-1. Acesse a URL do API Gateway (output `api_gateway_endpoint`) e faça:
-   ```bash
-   curl -X POST <API_GATEWAY_URL>/auth/token \
-     -H "Content-Type: application/json" \
-     -d '{"cpf": "529.982.247-25"}'
-   ```
-2. Use o `access_token` retornado para acessar a API Principal:
-   ```bash
-   curl -H "Authorization: Bearer <TOKEN>" \
-     http://<ALB_DNS>/api/v1/ordens-servico
-   ```
-   Esperado: `200 OK`.
+# 1. Atualizar o contexto do kubectl com o nome correto do cluster
+aws eks update-kubeconfig --name eks-fiap-soat-terraform --region sa-east-1
+
+# 2. Executar o deploy automatizado da API (a partir da raiz ou de fase1-tech-challenge)
+cd fase1-tech-challenge/k8s/overlays/aws
+chmod +x deploy.sh
+./deploy.sh
+```
+
+### 1.5. Aplicar Dashboards e Métricas da Aplicação (Grafana + Prometheus)
+Para publicar os dashboards de negócio da oficina e configurar o scraping de métricas da API .NET no Prometheus:
+```bash
+cd fase1-tech-challenge/k8s/observability
+chmod +x install.sh
+./install.sh
+```
+*O script aplica o `ServiceMonitor` (coleta de `/metrics`), `PrometheusRule` (alertas corporativos), `Probe` (uptime) e publica o ConfigMap `techchallenge-grafana-dashboard` com a label `grafana_dashboard=1`, que o sidecar do Grafana descobre e importa automaticamente em poucos segundos.*
 
 ---
 
-## Passo 2: Destruir o Ambiente (Para não gerar custos)
+## Passo 2: Verificação e Testes Ponta a Ponta
 
-A ordem de destruição é **inversa** à de criação:
+Com todos os serviços ativos, execute os testes de validação integrados:
+
+### 2.1. Teste de Autenticação na Borda (Edge Auth)
+Obtenha o endpoint do API Gateway e requisite um token JWT informando um CPF válido:
 
 ```bash
-# 1. Destruir o RDS
+API_GW_URL=$(cd soat-infra/environments/prod && terraform output -raw api_gateway_endpoint)
+
+TOKEN_RESPONSE=$(curl -s -X POST "${API_GW_URL}/auth" \
+  -H "Content-Type: application/json" \
+  -d '{"cpf": "282.027.830-20"}')
+
+echo "$TOKEN_RESPONSE"
+```
+**Resposta esperada (`200 OK`):**
+```json
+{
+  "access_token": "eyJhbGciOi...",
+  "token_type": "Bearer",
+  "expires_in": 3600
+}
+```
+
+### 2.2. Teste da API Principal Protegida
+Extraia o `access_token` gerado e acesse uma rota protegida via Application Load Balancer:
+
+```bash
+TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
+ALB_DNS=$(cd soat-infra/environments/prod && terraform output -raw alb_dns)
+
+curl -i -H "Authorization: Bearer $TOKEN" \
+  "http://${ALB_DNS}/api/v1/ordens-servico"
+```
+**Resposta esperada:** `HTTP/1.1 200 OK`.
+
+### 2.3. Acesso à Documentação Interativa (Swagger)
+Abra no navegador para explorar todos os endpoints da oficina mecânica:
+```text
+http://<ALB_DNS>/swagger
+```
+
+### 2.4. Acesso aos Dashboards de Observabilidade (Grafana)
+O Grafana está integrado ao mesmo Application Load Balancer na porta `3000`:
+```text
+http://<ALB_DNS>:3000
+```
+- **Usuário padrão:** `admin`
+- **Dashboards pré-carregados:** Volume diário de OS, Tempo por etapa, Latência p95, Consumo de recursos K8s e Logs via Loki.
+
+---
+
+## Passo 3: Destruir o Ambiente (Para não gerar custos)
+
+A ordem de destruição é **inversa** à de criação para respeitar as dependências de rede da AWS:
+
+```bash
+# 1. Destruir o RDS primeiro (libera as ENIs da VPC)
 cd soat-db/environments/prod
 terraform destroy -auto-approve
 
@@ -90,33 +166,17 @@ cd ../../../soat-infra/environments/prod
 terraform destroy -auto-approve
 ```
 
-> ✅ O bucket S3, a tabela DynamoDB e os parâmetros SSM do bootstrap **continuam intactos**.
-> Na próxima subida, basta repetir o Passo 1.
+> ✅ O bucket S3, a tabela DynamoDB e os parâmetros do Bootstrap **permanecem intactos** para o próximo teste.
 
 ---
 
 ## Rotação de Senhas e Segredos
 
-### Rotacionar o JWT Secret
+### Rotacionar a Senha do Banco de Dados
+A Lambda resolve a string de conexão diretamente no SSM em tempo de execução (*cold start*), não exigindo re-apply do `soat-infra`:
 
 ```bash
-# 1. Atualizar o valor no SSM
-aws ssm put-parameter \
-  --name "/techchallenge/prod/jwt_secret" \
-  --value "NOVA-CHAVE-COM-PELO-MENOS-32-CARACTERES" \
-  --type SecureString \
-  --overwrite \
-  --region sa-east-1
-
-# 2. Re-apply do soat-infra para a Lambda pegar o novo valor
-cd soat-infra/environments/prod
-terraform apply -auto-approve
-```
-
-### Rotacionar a Senha do Banco
-
-```bash
-# 1. Atualizar no SSM
+# 1. Atualizar a senha no SSM Parameter Store
 aws ssm put-parameter \
   --name "/techchallenge/prod/db_password" \
   --value "NOVA-SENHA-SEGURA" \
@@ -124,27 +184,61 @@ aws ssm put-parameter \
   --overwrite \
   --region sa-east-1
 
-# 2. Re-apply do soat-db para alterar a senha no RDS e atualizar a connection string
+# 2. Re-apply do soat-db para aplicar a nova credencial no RDS e atualizar a connection string
 cd soat-db/environments/prod
 terraform apply -auto-approve
 
-# 3. Re-apply do soat-infra para a Lambda pegar a nova connection string
-cd ../../../soat-infra/environments/prod
-terraform apply -auto-approve
+# 3. Reiniciar os pods da API no EKS para capturarem a nova senha
+kubectl rollout restart deployment/api -n techchallenge
 ```
 
-> **Nota:** A rotação requer `terraform apply` porque os valores são injetados como variáveis de ambiente na Lambda em deploy-time, não em runtime.
+### Rotacionar o JWT Secret
+```bash
+# 1. Atualizar no SSM
+aws ssm put-parameter \
+  --name "/techchallenge/prod/jwt_secret" \
+  --value "NOVA-CHAVE-COM-PELO-MENOS-32-CARACTERES" \
+  --type SecureString \
+  --overwrite \
+  --region sa-east-1
+
+# 2. Atualizar a variável de ambiente da Lambda
+cd soat-infra/environments/prod
+terraform apply -auto-approve
+
+# 3. Reiniciar a aplicação para recarregar a assinatura
+kubectl rollout restart deployment/api -n techchallenge
+```
 
 ---
 
-## Diagrama do Fluxo
+## Diagrama da Arquitetura Operacional
 
 ```
-Bootstrap (1x)     →   soat-infra (apply)   →   soat-db (apply)   →   soat-infra (re-apply)
-  ├─ S3 Bucket           ├─ EKS                   ├─ RDS PostgreSQL     └─ Lambda lê SSM ✓
-  ├─ DynamoDB             ├─ ALB                   ├─ SSM: db_endpoint
-  └─ SSM Params           ├─ Lambda                └─ SSM: db_connection_string
-                          ├─ API Gateway
-                          ├─ Observabilidade
-                          └─ SSM: alb_dns
+Bootstrap (Executado 1x)
+  ├─ S3 Bucket (Backend de Estado)
+  ├─ DynamoDB (State Locking)
+  └─ SSM Parameter Store (/techchallenge/prod/*)
+         │
+         ▼
+soat-infra (Executado 1x)
+  ├─ VPC & Subnets Públicas
+  ├─ Cluster AWS EKS (3 nós)
+  ├─ Application Load Balancer (:80 API, :3000 Grafana)
+  ├─ Stack Observabilidade (Prometheus, Grafana, Loki, Tempo)
+  └─ AWS Lambda Auth & API Gateway (/auth)
+         │
+         ▼
+soat-db (Executado 1x)
+  ├─ AWS RDS PostgreSQL 16
+  └─ Publicação automática no SSM (db_endpoint + db_connection_string)
+         │
+         ▼
+lambda-auth-function (Deploy de Código)
+  └─ Atualização do binário .NET 8 (leitura dinâmica do SSM via SDK)
+         │
+         ▼
+fase1-tech-challenge (Deploy K8s)
+  ├─ Migrations EF Core + Database Seed
+  └─ Pods API .NET expostos via NodePort 30080
 ```
