@@ -43,7 +43,7 @@ variable "grafana_admin_password" {
 variable "lambda_s3_bucket" {
   description = "Bucket S3 que contém o ZIP publicado da Lambda de autenticação"
   type        = string
-  default     = "soat-fiap-tfstate-493499933061"
+  default     = "soat-fiap-backend-tfstate"
 }
 
 variable "lambda_s3_key" {

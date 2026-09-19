@@ -9,7 +9,7 @@
 #   2. Tabela DynamoDB para locking de concorrência
 #   3. Parâmetros no SSM Parameter Store (segredos JWT + credenciais DB)
 #
-# O nome do bucket é determinístico: soat-fiap-tfstate-<ACCOUNT_ID>
+# O nome do bucket é determinístico: soat-fiap-backend-tfstate
 # ==============================================================================
 
 terraform {
@@ -39,7 +39,7 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 
 locals {
-  bucket_name = "soat-fiap-tfstate-${data.aws_caller_identity.current.account_id}"
+  bucket_name = "soat-fiap-backend-tfstate"
 }
 
 # ==============================================================================

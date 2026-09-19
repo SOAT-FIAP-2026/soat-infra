@@ -34,7 +34,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "soat-fiap-tfstate-493499933061"
+    bucket         = "soat-fiap-backend-tfstate"
     key            = "k8s/terraform.tfstate"
     region         = "sa-east-1"
     dynamodb_table = "soat-fiap-terraform-locks"

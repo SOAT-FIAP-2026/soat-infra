@@ -25,12 +25,12 @@ terraform init
 terraform apply
 ```
 
-Após o apply, anote o output `state_bucket_name` — ele será o nome do bucket nos backends dos módulos efêmeros. O nome segue o padrão: `soat-fiap-tfstate-<ACCOUNT_ID>`.
+Após o apply, anote o output `state_bucket_name` — ele será o nome do bucket nos backends dos módulos efêmeros. O nome segue o padrão: `soat-fiap-backend-tfstate`.
 
 ### Verificação
 
 No Console AWS, confirme:
-1. **S3** → Bucket `soat-fiap-tfstate-<ACCOUNT_ID>` existe com versionamento habilitado.
+1. **S3** → Bucket `soat-fiap-backend-tfstate` existe com versionamento habilitado.
 2. **DynamoDB** → Tabela `soat-fiap-terraform-locks` existe.
 3. **Systems Manager → Parameter Store** → Os parâmetros em `/techchallenge/prod/*` estão visíveis.
 
