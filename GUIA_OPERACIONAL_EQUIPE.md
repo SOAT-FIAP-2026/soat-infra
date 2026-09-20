@@ -157,6 +157,10 @@ http://<ALB_DNS>:3000
 A ordem de destruição é **inversa** à de criação para respeitar as dependências de rede da AWS:
 
 ```bash
+# 0. Limpar os workloads no Kubernetes (libera volumes EBS/PVCs e pods antes de desligar os nós)
+kubectl delete namespace techchallenge --timeout=60s || true
+kubectl delete namespace monitoring --timeout=60s || true
+
 # 1. Destruir o RDS primeiro (libera as ENIs da VPC)
 cd soat-db/environments/prod
 terraform destroy -auto-approve

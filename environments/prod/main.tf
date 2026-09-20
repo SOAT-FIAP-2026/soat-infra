@@ -51,6 +51,10 @@ module "eks" {
   cluster_policy_attachment_dep  = module.iam.cluster_policy_attachment
   node_cni_policy_attachment_dep = module.iam.node_cni_policy_attachment
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
+
+  # Garante que durante o destroy o EKS e os nós (com IPs públicos) sejam
+  # destruídos integralmente ANTES do Internet Gateway e da VPC
+  depends_on = [module.networking]
 }
 
 # --- SSM Parameter Store — Leitura de segredos para a Lambda ------------------
@@ -102,7 +106,7 @@ module "lambda" {
   s3_bucket = var.lambda_s3_bucket
   s3_key    = var.lambda_s3_key
 
-  log_retention_days = 14
+  log_retention_days = 1
 
   # Rede VPC: conecta a Lambda na mesma VPC para alcançar o RDS PostgreSQL
   subnet_ids         = module.networking.public_subnet_ids
@@ -119,7 +123,10 @@ module "lambda" {
     JWT_EXPIRES_IN_SECONDS         = var.jwt_expires_in_seconds
   }
 
-  depends_on = [aws_s3_object.lambda_package_placeholder]
+  depends_on = [
+    aws_s3_object.lambda_package_placeholder,
+    module.networking,
+  ]
 }
 
 # --- Módulo: API Gateway ------------------------------------------------------
@@ -187,7 +194,10 @@ module "load_balancer" {
   api_node_port     = 30080
   grafana_node_port = 30300
 
-  depends_on = [module.eks]
+  depends_on = [
+    module.eks,
+    module.networking,
+  ]
 }
 
 # --- SSM: Publicação do DNS do ALB --------------------------------------------

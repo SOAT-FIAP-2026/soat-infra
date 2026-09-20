@@ -48,6 +48,8 @@ module "eks" {
   cluster_policy_attachment_dep  = module.iam.cluster_policy_attachment
   node_cni_policy_attachment_dep = module.iam.node_cni_policy_attachment
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
+
+  depends_on = [module.networking]
 }
 
 # --- Módulo: Lambda -----------------------------------------------------------
@@ -72,6 +74,8 @@ module "lambda" {
     JWT_AUDIENCE           = "fiap-api"
     JWT_EXPIRES_IN_SECONDS = "3600"
   }
+
+  depends_on = [module.networking]
 }
 
 # --- Módulo: API Gateway ------------------------------------------------------
