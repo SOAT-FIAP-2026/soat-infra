@@ -34,9 +34,11 @@ terraform {
   }
 
   backend "s3" {
-    bucket = "fiap-soat-techchallenge-backend"
-    key    = "k8s/terraform.tfstate"
-    region = "sa-east-1"
+    bucket         = "soat-fiap-backend-tfstate"
+    key            = "k8s/terraform.tfstate"
+    region         = "sa-east-1"
+    dynamodb_table = "soat-fiap-terraform-locks"
+    encrypt        = true
   }
 }
 

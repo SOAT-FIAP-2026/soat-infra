@@ -4,7 +4,7 @@
 
 # --- Data Sources -------------------------------------------------------------
 data "aws_iam_user" "terraform_user" {
-  user_name = "terraform-user"
+  user_name = "fiap-soat"
 }
 
 # --- Módulo: Networking -------------------------------------------------------
@@ -51,6 +51,41 @@ module "eks" {
   cluster_policy_attachment_dep  = module.iam.cluster_policy_attachment
   node_cni_policy_attachment_dep = module.iam.node_cni_policy_attachment
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
+
+  # Garante que durante o destroy o EKS e os nós (com IPs públicos) sejam
+  # destruídos integralmente ANTES do Internet Gateway e da VPC
+  depends_on = [module.networking]
+}
+
+# --- SSM Parameter Store — Leitura de segredos para a Lambda ------------------
+# Os parâmetros de token JWT são lidos aqui. A string de conexão com o RDS é
+# resolvida dinamicamente pela própria Lambda em tempo de execução via SSM.
+
+data "aws_ssm_parameter" "jwt_secret" {
+  name            = "/techchallenge/prod/jwt_secret"
+  with_decryption = true
+}
+
+data "aws_ssm_parameter" "jwt_issuer" {
+  name = "/techchallenge/prod/jwt_issuer"
+}
+
+data "aws_ssm_parameter" "jwt_audience" {
+  name = "/techchallenge/prod/jwt_audience"
+}
+
+# --- Lambda: Placeholder do Pacote no S3 --------------------------------------
+# Garante que um ZIP válido exista no S3 para o primeiro apply caso o CI/CD
+# ainda não tenha feito upload do pacote compilado.
+resource "aws_s3_object" "lambda_package_placeholder" {
+  bucket = var.lambda_s3_bucket
+  key    = var.lambda_s3_key
+  # ZIP contendo placeholder.txt para atender à validação da AWS Lambda (que rejeita zips vazios)
+  content_base64 = "UEsDBAoAAAAAALGMM10ggSzcDAAAAAwAAAAPABwAcGxhY2Vob2xkZXIudHh0VVQJAAOO8q5qjvKuanV4CwABBOgDAAAE6AMAAHBsYWNlaG9sZGVyClBLAQIeAwoAAAAAALGMM10ggSzcDAAAAAwAAAAPABgAAAAAAAEAAAC0gQAAAABwbGFjZWhvbGRlci50eHRVVAUAA47yrmp1eAsAAQToAwAABOgDAABQSwUGAAAAAAEAAQBVAAAAVQAAAAAA"
+
+  lifecycle {
+    ignore_changes = [content_base64, etag]
+  }
 }
 
 # --- Módulo: Lambda -----------------------------------------------------------
@@ -71,15 +106,27 @@ module "lambda" {
   s3_bucket = var.lambda_s3_bucket
   s3_key    = var.lambda_s3_key
 
-  log_retention_days = 14
+  log_retention_days = 1
 
+  # Rede VPC: conecta a Lambda na mesma VPC para alcançar o RDS PostgreSQL
+  subnet_ids         = module.networking.public_subnet_ids
+  security_group_ids = [module.networking.main_security_group_id]
+
+  # Credenciais e claims JWT lidas diretamente do SSM Parameter Store.
+  # A connection string do RDS é resolvida dinamicamente pela própria Lambda
+  # no cold start a partir do parâmetro SSM indicado abaixo.
   environment_variables = {
-    DB_CONNECTION_STRING   = var.db_connection_string
-    JWT_SECRET             = var.jwt_secret
-    JWT_ISSUER             = "TechChallenge"
-    JWT_AUDIENCE           = "techchallenge.com.br"
-    JWT_EXPIRES_IN_SECONDS = var.jwt_expires_in_seconds
+    SSM_DB_CONNECTION_STRING_PARAM = "/techchallenge/prod/db_connection_string"
+    JWT_SECRET                     = data.aws_ssm_parameter.jwt_secret.value
+    JWT_ISSUER                     = data.aws_ssm_parameter.jwt_issuer.value
+    JWT_AUDIENCE                   = data.aws_ssm_parameter.jwt_audience.value
+    JWT_EXPIRES_IN_SECONDS         = var.jwt_expires_in_seconds
   }
+
+  depends_on = [
+    aws_s3_object.lambda_package_placeholder,
+    module.networking,
+  ]
 }
 
 # --- Módulo: API Gateway ------------------------------------------------------
@@ -147,5 +194,16 @@ module "load_balancer" {
   api_node_port     = 30080
   grafana_node_port = 30300
 
-  depends_on = [module.eks]
+  depends_on = [
+    module.eks,
+    module.networking,
+  ]
+}
+
+# --- SSM: Publicação do DNS do ALB --------------------------------------------
+resource "aws_ssm_parameter" "alb_dns" {
+  name      = "/techchallenge/prod/alb_dns"
+  type      = "String"
+  value     = module.load_balancer.dns_name
+  overwrite = true
 }

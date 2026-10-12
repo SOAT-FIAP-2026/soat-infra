@@ -39,7 +39,7 @@ module "eks" {
   subnet_ids            = module.networking.public_subnet_ids
   security_group_id     = module.networking.main_security_group_id
   instance_types        = var.instance_types
-  terraform_user_arn    = "arn:aws:iam::000000000000:user/terraform-user"
+  terraform_user_arn    = "arn:aws:iam::000000000000:user/fiap-soat"
   create_node_group     = false
   create_access_entries = false
   create_ebs_csi_driver = false
@@ -48,6 +48,8 @@ module "eks" {
   cluster_policy_attachment_dep  = module.iam.cluster_policy_attachment
   node_cni_policy_attachment_dep = module.iam.node_cni_policy_attachment
   node_ecr_policy_attachment_dep = module.iam.node_ecr_policy_attachment
+
+  depends_on = [module.networking]
 }
 
 # --- Módulo: Lambda -----------------------------------------------------------
@@ -72,6 +74,8 @@ module "lambda" {
     JWT_AUDIENCE           = "fiap-api"
     JWT_EXPIRES_IN_SECONDS = "3600"
   }
+
+  depends_on = [module.networking]
 }
 
 # --- Módulo: API Gateway ------------------------------------------------------

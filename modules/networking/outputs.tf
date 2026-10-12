@@ -22,3 +22,9 @@ output "main_security_group_id" {
   description = "ID do Security Group principal do cluster"
   value       = aws_security_group.main.id
 }
+
+output "internet_gateway_id" {
+  description = "ID do Internet Gateway da VPC"
+  value       = aws_internet_gateway.main.id
+}
+

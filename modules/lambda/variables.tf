@@ -79,3 +79,16 @@ variable "log_retention_days" {
   type        = number
   default     = 7
 }
+
+# --- Rede VPC -----------------------------------------------------------------
+variable "subnet_ids" {
+  description = "Subnets da VPC para a Lambda alcançar o RDS PostgreSQL"
+  type        = list(string)
+  default     = []
+}
+
+variable "security_group_ids" {
+  description = "Security Groups associados à interface de rede da Lambda"
+  type        = list(string)
+  default     = []
+}
